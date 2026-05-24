@@ -1,0 +1,8 @@
+{
+  "test": {
+    "command": "npm test",
+    "timeoutMs": 120000
+  },
+  "enabledVerifiers": ["tests", "files", "git"],
+  "reportMode": "failures-only"
+}

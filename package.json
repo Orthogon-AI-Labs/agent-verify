@@ -1,0 +1,26 @@
+{
+  "name": "agent-verify",
+  "version": "0.1.0",
+  "description": "Verify catches false completion claims from coding agents.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Orthogon AI Labs",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "agent-verify": "./src/cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node scripts/check-syntax.mjs",
+    "demo": "node scripts/demo.mjs"
+  },
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "agents",
+    "verification",
+    "testing"
+  ]
+}

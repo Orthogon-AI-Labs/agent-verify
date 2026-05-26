@@ -1,0 +1,11 @@
+{
+  "name": "agent-verify-local",
+  "owner": { "name": "Orthogon AI Labs" },
+  "plugins": [
+    {
+      "name": "agent-verify",
+      "source": "./",
+      "description": "Verify catches false completion claims from coding agents."
+    }
+  ]
+}

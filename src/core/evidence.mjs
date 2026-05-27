@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { readJsonFile } from "./json.mjs";
 import { normalizePathForCompare } from "./paths.mjs";
 
 export function getPluginDataRoot() {
@@ -30,7 +31,7 @@ export function loadSessionEvidence(dataRoot, sessionId, cwd) {
     return emptyEvidence(sessionId, cwd);
   }
 
-  const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+  const parsed = readJsonFile(file);
   return {
     ...emptyEvidence(sessionId, cwd),
     ...parsed,

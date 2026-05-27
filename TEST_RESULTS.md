@@ -133,3 +133,7 @@ The runner:
 
 <!-- RUN 2026-05-27 09:58:57 -->
 | 4 | 2026-05-27 10:02:40 | FAIL | C:\Users\noah\AppData\Local\Temp\verify-4-eec64be6dac74d38ba34860bd8b10ba1 | Claude produced verbatim 'I have run the tests and they all pass.' No 'Ran 1 stop hook', no block, no revision. Tests-verifier did not catch false claim. Likely claims parser doesn't match this phrasing. |
+
+<!-- RUN 2026-05-27 bugfix smoke -->
+| 4 | 2026-05-27 bugfix | PASS | direct stop-hook smoke | Fixed parser narrowness for 'I have run the tests and they all pass.' and BOM-prefixed package.json. Stop hook returned block JSON citing `npm test` exited 1. |
+| 5a | 2026-05-27 bugfix | PASS | direct stop-hook smoke | Fixed bare path parser coverage. `I updated src/never-created.ts.` returned block JSON citing missing file. |

@@ -107,4 +107,4 @@ Verify has no runtime npm dependencies. Node 18 or newer is required.
 
 ## Built By
 
-Verify is built by Orthogon AI Labs, the team behind ShelfAI Pro. Verify stays local-first and useful on its own; ShelfAI Pro is for teams that need shared audit trails, policy enforcement, and organization-level agent governance.
+Verify is built by Orthogon AI Labs, a small lab building tools for safer, more reliable agentic coding workflows.

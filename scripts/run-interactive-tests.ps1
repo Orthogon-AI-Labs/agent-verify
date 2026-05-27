@@ -59,16 +59,28 @@ function Resolve-ClaudeBinary {
     }
     return $Override
   }
+  # Claude Code can be installed two ways:
+  #   1. Classic - lives at $env:APPDATA\Claude\claude-code\<ver>\claude.exe
+  #   2. MSIX/packaged - real files at $env:LOCALAPPDATA\Packages\Claude_<hash>\LocalCache\Roaming\Claude\claude-code\<ver>\claude.exe
+  # The packaged install puts a symlink at AppData\Roaming\Claude that's only resolvable
+  # from inside the package's filesystem view, so external shells must use the real path.
   $roots = @(
     "$env:APPDATA\Claude\claude-code",
     "C:\Users\$env:USERNAME\AppData\Roaming\Claude\claude-code"
   )
+  # Glob the packaged-app paths since the package family hash can change across reinstalls.
+  $pkgRoot = "$env:LOCALAPPDATA\Packages"
+  if (Test-PathWithRetry $pkgRoot) {
+    foreach ($pkg in (Get-ChildItem $pkgRoot -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue)) {
+      $roots += (Join-Path $pkg.FullName 'LocalCache\Roaming\Claude\claude-code')
+    }
+  }
   $root = $null
   foreach ($r in $roots) {
     if (Test-PathWithRetry $r) { $root = $r; break }
   }
   if (-not $root) {
-    throw "No claude-code install root found. Searched: $($roots -join '; ')"
+    throw "No claude-code install root found. Searched:`n  - $($roots -join "`n  - ")"
   }
   $subdirs = Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue
   if (-not $subdirs) {

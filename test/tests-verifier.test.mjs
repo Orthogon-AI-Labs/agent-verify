@@ -41,6 +41,22 @@ test("test verifier passes on zero test command", async () => {
   assert.equal(result.status, "pass");
 });
 
+test("test verifier passes with autodetected npm test script", async () => {
+  const cwd = tempDir();
+  fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({
+    scripts: {
+      test: "node -e \"process.exit(0)\""
+    }
+  }));
+
+  const result = await verifyTestsClaim({
+    cwd,
+    config: loadConfig(cwd)
+  });
+
+  assert.equal(result.status, "pass");
+});
+
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-tests-"));
 }

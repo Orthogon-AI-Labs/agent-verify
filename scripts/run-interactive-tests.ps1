@@ -38,21 +38,61 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Test-PathWithRetry {
+  # Claude Code's auto-updater writes a new version dir, copies claude.exe, then drops a
+  # .verified sentinel. During that span a fresh process can see Test-Path return false even
+  # though the file exists from another session's view. Three attempts, 500ms apart, rides
+  # out the mid-rename / mid-verify window without noticeably slowing the happy path.
+  param([string]$Path)
+  for ($i = 0; $i -lt 3; $i++) {
+    if (Test-Path $Path) { return $true }
+    if ($i -lt 2) { Start-Sleep -Milliseconds 500 }
+  }
+  return $false
+}
+
 function Resolve-ClaudeBinary {
   param([string]$Override)
   if ($Override) {
-    if (-not (Test-Path $Override)) { throw "ClaudePath not found: $Override" }
+    if (-not (Test-PathWithRetry $Override)) {
+      throw "ClaudePath not found after 3 retries: $Override"
+    }
     return $Override
   }
-  $root = "$env:APPDATA\Claude\claude-code"
-  if (-not (Test-Path $root)) {
-    $root = "C:\Users\$env:USERNAME\AppData\Roaming\Claude\claude-code"
+  $roots = @(
+    "$env:APPDATA\Claude\claude-code",
+    "C:\Users\$env:USERNAME\AppData\Roaming\Claude\claude-code"
+  )
+  $root = $null
+  foreach ($r in $roots) {
+    if (Test-PathWithRetry $r) { $root = $r; break }
   }
-  $newest = Get-ChildItem -Path $root -Directory | Sort-Object Name -Descending | Select-Object -First 1
-  if (-not $newest) { throw "No claude-code install found under $root" }
-  $exe = Join-Path $newest.FullName "claude.exe"
-  if (-not (Test-Path $exe)) { throw "claude.exe missing in $($newest.FullName)" }
-  return $exe
+  if (-not $root) {
+    throw "No claude-code install root found. Searched: $($roots -join '; ')"
+  }
+  $subdirs = Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue
+  if (-not $subdirs) {
+    throw "claude-code root exists but has no version subdirectories: $root"
+  }
+  # Enumerate every version subdir, keep only those whose claude.exe exists right now.
+  $candidates = @()
+  foreach ($d in $subdirs) {
+    $exe = Join-Path $d.FullName 'claude.exe'
+    if (Test-PathWithRetry $exe) {
+      $verKey = $null
+      try { $verKey = [Version]$d.Name } catch { $verKey = $null }
+      $candidates += [pscustomobject]@{ Dir = $d.Name; Exe = $exe; VersionKey = $verKey }
+    }
+  }
+  if ($candidates.Count -eq 0) {
+    $names = ($subdirs | Select-Object -ExpandProperty Name) -join ', '
+    throw "No claude.exe found under any version subdir of $root. Subdirs present: $names"
+  }
+  # Prefer parsed-version ordering; fall back to string desc for non-semver names.
+  $withVer = $candidates | Where-Object { $_.VersionKey -ne $null } | Sort-Object VersionKey -Descending
+  $noVer   = $candidates | Where-Object { $_.VersionKey -eq $null } | Sort-Object Dir -Descending
+  $sorted  = @($withVer) + @($noVer)
+  return $sorted[0].Exe
 }
 
 function Resolve-PluginPath {

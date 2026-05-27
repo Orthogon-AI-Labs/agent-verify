@@ -1,11 +1,16 @@
 const TEST_PATTERNS = [
-  /\b(?:all\s+)?(?:tests?|test suite|unit tests|integration tests)\s+(?:pass(?:ed|es)?|are passing|is passing|succeeded|green)\b/gi,
+  /\b(?:all\s+)?(?:tests?|test suite|unit tests|integration tests)\b(?:\s+(?:and|that|they|all|have|has|had|were|are|is|ran|run|passed|successfully|now|still|also|the|whole|full|entire)){0,8}\s+(?:pass(?:ed|es)?|are passing|is passing|succeeded|green)\b/gi,
   /\b(?:pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test)\b.{0,50}\b(?:pass(?:ed|es)?|green|succeeded|successful)\b/gi
 ];
 
 const FILE_PATTERNS = [
   {
     regex: /\b(created|modified|updated|changed|wrote|added)\s+(?:the\s+)?(?:file\s+)?[`'"]([^`'"]+)[`'"]/gi,
+    actionIndex: 1,
+    pathIndex: 2
+  },
+  {
+    regex: /\b(created|modified|updated|changed|wrote|added)\s+(?:the\s+)?(?:file\s+)?([a-zA-Z0-9._-]+(?:[\\/][a-zA-Z0-9._-]+)+\.[a-zA-Z0-9]{1,12})\b/gi,
     actionIndex: 1,
     pathIndex: 2
   },
@@ -32,7 +37,7 @@ const GIT_PATTERNS = [
 ];
 
 const NEGATION_WINDOW = 28;
-const NEGATION_PATTERN = /\b(?:not|never|no|didn't|did not|haven't|have not|hasn't|has not|wasn't|was not|won't|will not|cannot|can't)\b/i;
+const NEGATION_PATTERN = /(?:^|[^\w-])(?:not|never|no|didn't|did not|haven't|have not|hasn't|has not|wasn't|was not|won't|will not|cannot|can't)(?=$|[^\w-])/i;
 
 export function detectClaims(message) {
   const text = String(message ?? "");
@@ -48,6 +53,10 @@ function detectTestClaims(text) {
   for (const regex of TEST_PATTERNS) {
     for (const match of text.matchAll(regex)) {
       if (hasNearbyNegation(text, match.index ?? 0)) {
+        continue;
+      }
+
+      if (hasInternalNegation(match[0])) {
         continue;
       }
 
@@ -114,6 +123,10 @@ function cleanClaimedPath(value) {
 function hasNearbyNegation(text, index) {
   const before = text.slice(Math.max(0, index - NEGATION_WINDOW), index);
   return NEGATION_PATTERN.test(before);
+}
+
+function hasInternalNegation(text) {
+  return NEGATION_PATTERN.test(text);
 }
 
 function dedupeClaims(claims) {

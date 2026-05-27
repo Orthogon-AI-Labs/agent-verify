@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { readJsonFile } from "./json.mjs";
 
 const DEFAULT_CONFIG = {
   test: {
@@ -22,7 +23,7 @@ export function loadConfig(cwd) {
       continue;
     }
 
-    const userConfig = JSON.parse(fs.readFileSync(file, "utf8"));
+    const userConfig = readJsonFile(file);
     return normalizeConfig(mergeConfig(DEFAULT_CONFIG, userConfig), file);
   }
 
@@ -89,7 +90,7 @@ function detectTestCommand(cwd) {
   const packageJsonPath = path.join(root, "package.json");
 
   if (fs.existsSync(packageJsonPath)) {
-    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    const pkg = readJsonFile(packageJsonPath);
     const testScript = pkg.scripts?.test;
     if (typeof testScript === "string" && testScript.trim() && !isDefaultNpmPlaceholder(testScript)) {
       return {

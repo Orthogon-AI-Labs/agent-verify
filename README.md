@@ -2,6 +2,8 @@
 
 Verify is a Claude Code plugin that checks the claims an agent makes before the final answer closes. If the agent says tests pass, a file changed, or a branch was pushed, Verify checks the project and makes Claude correct the answer when reality disagrees.
 
+Built by Orthogon Labs.
+
 V1 supports Claude Code first. Codex support is available as a notification workflow, and Cursor adapters are launching in the coming days.
 
 ## Install for Claude Code

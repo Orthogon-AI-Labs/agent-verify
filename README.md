@@ -2,7 +2,7 @@
 
 Verify is a Claude Code plugin that checks the claims an agent makes before the final answer closes. If the agent says tests pass, a file changed, or a branch was pushed, Verify checks the project and makes Claude correct the answer when reality disagrees.
 
-V1 supports Claude Code first. Codex and Cursor adapters are launching in the coming days.
+V1 supports Claude Code first. Codex support is available as a notification workflow, and Cursor adapters are launching in the coming days.
 
 ## Install for Claude Code
 
@@ -28,6 +28,23 @@ Verify found claim mismatches. Revise your final answer to include these verific
 
 Do not claim failed or unverified work succeeded.
 ```
+
+## Codex Notification Workflow
+
+Codex does not currently use the Claude Code Stop hook. The Codex plugin therefore runs Verify as a notification workflow: it checks a final-answer draft and reports what was false, missing, or inconclusive.
+
+```powershell
+npm.cmd run codex:notify -- --message "I have run the tests and they all pass."
+```
+
+Example output:
+
+```text
+Verify notification: not done or unverified:
+- FAILED: Claimed tests passed, but `npm test` exited 1.
+```
+
+The Codex plugin skill lives in `skills/verify-claims/` and tells Codex to run this notification before final answers that claim tests, file changes, commits, pushes, or pull requests.
 
 ## Configuration
 
@@ -66,7 +83,8 @@ Claude: Correction: I was wrong. The tests are failing and I did not verify that
 
 ## V2 Roadmap
 
-- Codex and Cursor adapters using the same core verifier engine.
+- Cursor adapter using the same core verifier engine.
+- Native Codex enforcement if Codex exposes lifecycle hooks.
 - Custom verifier registry for project-specific checks like lint, deploy, and health checks.
 - Migration verifiers for Alembic, Prisma, Rails, and Django.
 - Language-aware symbol/function verification.

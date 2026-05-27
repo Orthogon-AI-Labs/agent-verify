@@ -1,0 +1,36 @@
+{
+  "name": "agent-verify",
+  "version": "0.1.0",
+  "description": "Verify reports false or unverified completion claims from coding agents.",
+  "author": {
+    "name": "Orthogon AI Labs"
+  },
+  "homepage": "https://github.com/orthogon-ai-labs/agent-verify",
+  "repository": "https://github.com/orthogon-ai-labs/agent-verify",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "verification",
+    "testing",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Verify",
+    "shortDescription": "Reports what coding agents claimed but did not verify.",
+    "longDescription": "Verify reuses the agent-verify engine to check claims about tests, file changes, and git work, then reports false or inconclusive claims before finalizing an answer.",
+    "developerName": "Orthogon AI Labs",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://github.com/orthogon-ai-labs/agent-verify",
+    "defaultPrompt": [
+      "Verify my final claims before answering.",
+      "Report what was not actually done.",
+      "Check tests, file changes, and git claims."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

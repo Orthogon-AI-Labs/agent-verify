@@ -15,7 +15,8 @@
     "test": "node --test",
     "check": "node scripts/check-syntax.mjs",
     "demo": "node scripts/demo.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "codex:notify": "node scripts/codex-notify.mjs"
   },
   "keywords": [
     "claude-code",

@@ -89,7 +89,7 @@ Claude: Correction: I was wrong. The tests are failing and I did not verify that
 - Migration verifiers for Alembic, Prisma, Rails, and Django.
 - Language-aware symbol/function verification.
 - Local verification history.
-- Optional local-only ShelfAI Pro nudge after repeated failures, with no telemetry by default.
+- Optional team reporting for repeated verification failures, with no telemetry by default.
 
 ## Development
 
@@ -97,10 +97,12 @@ Claude: Correction: I was wrong. The tests are failing and I did not verify that
 npm test
 npm run check
 npm run demo
+npm run smoke
+npm run codex:notify -- --message "All tests pass."
 ```
 
 Verify has no runtime npm dependencies. Node 18 or newer is required.
 
-## ShelfAI Pro
+## Built By
 
-Verify is the free, local-first wedge. ShelfAI Pro is the team layer for audit trails, policy enforcement, and organization-level agent governance.
+Verify is built by Orthogon AI Labs, the team behind ShelfAI Pro. Verify stays local-first and useful on its own; ShelfAI Pro is for teams that need shared audit trails, policy enforcement, and organization-level agent governance.

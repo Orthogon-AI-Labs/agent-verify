@@ -41,6 +41,16 @@ test("returns null when no test command can be found", () => {
   assert.equal(resolveTestCommand(cwd), null);
 });
 
+test("default config enables protected verifier with safe defaults", () => {
+  const cwd = tempDir();
+  const config = loadConfig(cwd);
+
+  assert.equal(config.enabledVerifiers.includes("protected"), true);
+  assert.deepEqual(config.protected.allowed, []);
+  assert.deepEqual(config.protected.skipPaths, ["node_modules", "dist", "_archive"]);
+  assert.equal(config.protected.checkerPath, null);
+});
+
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-config-"));
 }

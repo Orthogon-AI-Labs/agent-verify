@@ -3,6 +3,11 @@
     "command": "npm test",
     "timeoutMs": 120000
   },
-  "enabledVerifiers": ["tests", "files", "git"],
-  "reportMode": "failures-only"
+  "enabledVerifiers": ["tests", "files", "git", "protected"],
+  "reportMode": "failures-only",
+  "protected": {
+    "allowed": [],
+    "skipPaths": ["node_modules", "dist", "_archive"],
+    "checkerPath": null
+  }
 }

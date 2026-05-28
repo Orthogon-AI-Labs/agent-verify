@@ -25,12 +25,28 @@ const smokeTests = [
     message: "I updated src/never-created.ts.",
     setup() {},
     reasonPattern: /src\/never-created\.ts.*file does not exist/s
+  },
+  {
+    name: "modified protected section claim",
+    message: "Protected sections are intact.",
+    async setup(fixture) {
+      const file = path.join(fixture, "docs", "protected.md");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, protectedBlock("Original protected text."));
+      await runCommand("git", ["init"], fixture);
+      await runCommand("git", ["config", "user.email", "verify@example.com"], fixture);
+      await runCommand("git", ["config", "user.name", "Verify Smoke"], fixture);
+      await runCommand("git", ["add", "."], fixture);
+      await runCommand("git", ["commit", "-m", "initial protected content"], fixture);
+      fs.writeFileSync(file, protectedBlock("Changed protected text."));
+    },
+    reasonPattern: /protected sections were intact.*docs\/protected\.md \(block: example\)/s
   }
 ];
 
 for (const smokeTest of smokeTests) {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-smoke-"));
-  smokeTest.setup(fixture);
+  await smokeTest.setup(fixture);
 
   const payload = {
     cwd: fixture,
@@ -100,4 +116,42 @@ function writeBomJson(file, value) {
     Buffer.from([0xef, 0xbb, 0xbf]),
     Buffer.from(JSON.stringify(value), "utf8")
   ]));
+}
+
+function protectedBlock(body) {
+  return [
+    "# Protected",
+    "",
+    "<!-- canon:protected:start name=\"example\" -->",
+    body,
+    "<!-- canon:protected:end -->",
+    ""
+  ].join("\n");
+}
+
+function runCommand(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`${command} ${args.join(" ")} exited ${code}: ${stderr || stdout}`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
 }

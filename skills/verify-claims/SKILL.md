@@ -19,6 +19,7 @@ Run Verify when the final answer includes claims like:
 - I committed changes
 - I pushed the branch
 - I opened a pull request
+- protected sections are intact or unchanged
 
 ## How To Run
 
@@ -44,7 +45,7 @@ npm.cmd run codex:notify -- --cwd "C:\path\to\project" --message "<final answer 
 
 If Verify prints `Verify notification: all detected claims checked out.`, you may answer normally.
 
-If Verify reports `Not done or unverified`, include those items in the final answer and correct any success claims. Do not say tests passed, files changed, commits were made, branches were pushed, or PRs were opened when Verify says they failed or were inconclusive.
+If Verify reports `Not done or unverified`, include those items in the final answer and correct any success claims. Do not say tests passed, files changed, commits were made, branches were pushed, PRs were opened, or protected sections stayed intact when Verify says they failed or were inconclusive.
 
 If Verify reports `No supported completion claims detected.`, no verification note is needed.
 

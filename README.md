@@ -83,6 +83,25 @@ Verify:
 Claude: Correction: I was wrong. The tests are failing and I did not verify that the branch was pushed.
 ```
 
+## What's Next (v1.1)
+
+A new **protected-sections verifier** is specced and ready for implementation. It catches a class of agent failure the existing verifiers don't: silent overwrites of content the user marked as protected.
+
+Mark a chunk of any Markdown file with canon's marker pair:
+
+```markdown
+<!-- canon:protected:start name="voice-rules" -->
+
+Write like a tired senior engineer. No marketing language.
+Never use the word "delve."
+
+<!-- canon:protected:end -->
+```
+
+If the agent claims `"protected sections are intact"` but actually modified one of these blocks, Verify v1.1 will catch the mismatch and report the file and block name. The pattern pairs with the sibling [canon](https://github.com/Orthogon-AI-Labs/canon) plugin — install both to enforce protection at canon's Stop hook AND at the Verify boundary.
+
+Implementation details and acceptance criteria: see [docs/specs/01-protected-sections.md](docs/specs/01-protected-sections.md).
+
 ## V2 Roadmap
 
 - Cursor adapter using the same core verifier engine.

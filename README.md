@@ -16,11 +16,12 @@ claude --plugin-dir .
 
 Once loaded, Verify runs automatically through Claude Code hooks. It stays quiet when no supported claims are made or when every detected claim checks out.
 
-## What V1 Checks
+## What Verify Checks
 
 - **Tests:** detects claims like "tests pass" and runs your configured or autodetected test command.
 - **Files:** detects claims like "updated `src/foo.ts`" and checks that the file was touched this session.
 - **Git and PRs:** detects claims like "committed", "pushed", or "opened a PR" and checks local git or `gh` when available.
+- **Protected sections:** detects claims like "protected sections are intact" and checks canon-style protected Markdown blocks against `HEAD`.
 
 If Verify catches a mismatch, it blocks the Stop hook once and tells Claude to revise the final response.
 
@@ -58,8 +59,13 @@ Add `verify.config.json` to the project being worked on:
     "command": "npm test",
     "timeoutMs": 120000
   },
-  "enabledVerifiers": ["tests", "files", "git"],
-  "reportMode": "failures-only"
+  "enabledVerifiers": ["tests", "files", "git", "protected"],
+  "reportMode": "failures-only",
+  "protected": {
+    "allowed": [],
+    "skipPaths": ["node_modules", "dist", "_archive"],
+    "checkerPath": null
+  }
 }
 ```
 
@@ -83,9 +89,9 @@ Verify:
 Claude: Correction: I was wrong. The tests are failing and I did not verify that the branch was pushed.
 ```
 
-## What's Next (v1.1)
+## Protected Sections
 
-A new **protected-sections verifier** is specced and ready for implementation. It catches a class of agent failure the existing verifiers don't: silent overwrites of content the user marked as protected.
+The protected-sections verifier catches a class of agent failure the other verifiers don't: silent overwrites of content the user marked as protected.
 
 Mark a chunk of any Markdown file with canon's marker pair:
 
@@ -98,7 +104,7 @@ Never use the word "delve."
 <!-- canon:protected:end -->
 ```
 
-If the agent claims `"protected sections are intact"` but actually modified one of these blocks, Verify v1.1 will catch the mismatch and report the file and block name. The pattern pairs with the sibling [canon](https://github.com/Orthogon-AI-Labs/canon) plugin — install both to enforce protection at canon's Stop hook AND at the Verify boundary.
+If the agent claims `"protected sections are intact"` but actually modified one of these blocks, Verify catches the mismatch and reports the file and block name. The checker is vendored, so Verify works standalone; the same marker convention also pairs with the sibling [canon](https://github.com/Orthogon-AI-Labs/canon) plugin.
 
 Implementation details and acceptance criteria: see [docs/specs/01-protected-sections.md](docs/specs/01-protected-sections.md).
 

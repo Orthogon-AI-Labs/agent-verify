@@ -1,6 +1,6 @@
 # Spec 01 — Protected Sections Verifier
 
-**Status:** Ready for implementation
+**Status:** Implemented
 **Lands in:** Verify v1.1
 **Author:** Noah / Orthogon AI Labs
 
@@ -8,7 +8,7 @@
 
 ## One-line
 
-Add a `protected` verifier to `src/core/verifiers/` that catches when the agent claims it preserved (or didn't touch) `<!-- canon:protected:start name="..." -->` blocks in Markdown files but actually modified them.
+Add a `protected` verifier to `src/core/verifiers/` that catches when the agent claims it preserved (or didn't touch) `&lt;!-- canon:protected:start name="..." --&gt;` blocks in Markdown files but actually modified them.
 
 ---
 
@@ -35,7 +35,7 @@ In:
 
 Not in:
 - Auto-fixing protected blocks — Verify only surfaces the mismatch, never rewrites code
-- New marker syntax — we use canon's `<!-- canon:protected:start name="..." -->` / `<!-- canon:protected:end -->` exactly
+- New marker syntax — we use canon's `&lt;!-- canon:protected:start name="..." --&gt;` / `&lt;!-- canon:protected:end --&gt;` exactly
 - Modifying canon's `check-protected-sections.py` itself — vendor it as-is, with a version constant for drift detection
 
 ---
@@ -159,7 +159,7 @@ Update `DEFAULT_CONFIG` in `src/core/config.mjs` to include `protected: { allowe
 The verifier ships when:
 
 1. A response claiming `"protected sections are intact"` against a clean repo returns `status: "pass"`.
-2. A response claiming `"protected sections are intact"` against a repo with a modified `<!-- canon:protected:start name="example" -->` block returns `status: "fail"` and the report names the file and block.
+2. A response claiming `"protected sections are intact"` against a repo with a modified `&lt;!-- canon:protected:start name="example" --&gt;` block returns `status: "fail"` and the report names the file and block.
 3. Same case but `verify.config.json` has `"protected": { "allowed": ["example"] }` returns `status: "pass"`.
 4. A claim unrelated to protected sections (tests pass, file created) does NOT trigger the protected verifier — `detectClaims` returns no protected-type claim.
 5. With no `python3` on PATH and no vendored checker, the verifier returns `status: "inconclusive"` with a clear summary and does NOT block the Stop hook.

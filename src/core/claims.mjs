@@ -36,6 +36,21 @@ const GIT_PATTERNS = [
   }
 ];
 
+const PROTECTED_PATTERNS = [
+  /\b(?:protected\s+sections?|protected\s+blocks?)\s+(?:are|stayed|remain|were)\s+(?:intact|untouched|preserved|unmodified)\b/gi,
+  /\b(?:didn't|did\s+not|haven't|have\s+not)\s+(?:touch|modify|edit|change)\s+(?:any\s+)?protected\b/gi,
+  /\b(?:left|kept)\s+(?:the\s+)?protected\s+(?:sections?|blocks?)\s+alone\b/gi,
+  /\bpreserved\s+(?:the\s+)?protected\s+(?:sections?|blocks?|markers?)\b/gi,
+  /\brespected\s+(?:the\s+)?(?:canon:)?protected\s+markers?\b/gi,
+  /\bI\s+(?:did\s+not|didn't)\s+modify\s+(?:any\s+)?protected\b/gi
+];
+
+const PROTECTED_SKIP_PATTERNS = [
+  /\bshould\s+leave\s+protected\s+(?:sections?|blocks?)\s+alone\b/i,
+  /\btried\s+not\s+to\s+(?:touch|modify|edit|change)\s+(?:any\s+)?protected\b/i,
+  /\bafter\s+override:\s+edited\s+protected\b/i
+];
+
 const NEGATION_WINDOW = 28;
 const NEGATION_PATTERN = /(?:^|[^\w-])(?:not|never|no|didn't|did not|haven't|have not|hasn't|has not|wasn't|was not|won't|will not|cannot|can't)(?=$|[^\w-])/i;
 
@@ -44,7 +59,8 @@ export function detectClaims(message) {
   return dedupeClaims([
     ...detectTestClaims(text),
     ...detectFileClaims(text),
-    ...detectGitClaims(text)
+    ...detectGitClaims(text),
+    ...detectProtectedClaims(text)
   ]);
 }
 
@@ -113,6 +129,26 @@ function detectGitClaims(text) {
   return claims;
 }
 
+function detectProtectedClaims(text) {
+  const claims = [];
+
+  for (const regex of PROTECTED_PATTERNS) {
+    for (const match of text.matchAll(regex)) {
+      const claimText = match[0].trim();
+      if (hasProtectedSkipPhrase(text, match.index ?? 0, claimText)) {
+        continue;
+      }
+
+      claims.push({
+        type: "protected",
+        text: claimText
+      });
+    }
+  }
+
+  return claims.length > 0 ? [claims[0]] : [];
+}
+
 function cleanClaimedPath(value) {
   return String(value)
     .trim()
@@ -127,6 +163,11 @@ function hasNearbyNegation(text, index) {
 
 function hasInternalNegation(text) {
   return NEGATION_PATTERN.test(text);
+}
+
+function hasProtectedSkipPhrase(text, index, claimText) {
+  const windowText = text.slice(Math.max(0, index - 40), index + claimText.length + 40);
+  return PROTECTED_SKIP_PATTERNS.some((regex) => regex.test(windowText));
 }
 
 function dedupeClaims(claims) {

@@ -4,7 +4,7 @@ Numbered specs for upcoming Verify work. Each spec includes status, scope, accep
 
 | # | Title | Status | Lands in |
 |---|---|---|---|
-| 01 | [Protected Sections Verifier](01-protected-sections.md) | Ready for implementation | v1.1 |
+| 01 | [Protected Sections Verifier](01-protected-sections.md) | Implemented | v1.1 |
 
 ## Conventions
 

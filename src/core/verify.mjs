@@ -4,6 +4,7 @@ import { getPluginDataRoot, loadSessionEvidence } from "./evidence.mjs";
 import { verifyTestsClaim } from "./verifiers/tests.mjs";
 import { verifyFileClaim } from "./verifiers/files.mjs";
 import { verifyGitClaim } from "./verifiers/git.mjs";
+import { verifyProtectedClaim } from "./verifiers/protected.mjs";
 
 export async function verifyFinalMessage(input, options = {}) {
   const cwd = input.cwd || process.cwd();
@@ -28,6 +29,12 @@ export async function verifyFinalMessage(input, options = {}) {
   if (isVerifierEnabled(config, "git")) {
     for (const claim of claims.filter((item) => item.type === "git")) {
       results.push(await verifyGitClaim({ cwd, claim, evidence }));
+    }
+  }
+
+  if (isVerifierEnabled(config, "protected")) {
+    for (const claim of claims.filter((item) => item.type === "protected")) {
+      results.push(await verifyProtectedClaim({ cwd, claim, evidence, config }));
     }
   }
 

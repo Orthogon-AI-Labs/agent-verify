@@ -7,7 +7,12 @@ const DEFAULT_CONFIG = {
     command: null,
     timeoutMs: 120000
   },
-  enabledVerifiers: ["tests", "files", "git"],
+  enabledVerifiers: ["tests", "files", "git", "protected"],
+  protected: {
+    allowed: [],
+    skipPaths: ["node_modules", "dist", "_archive"],
+    checkerPath: null
+  },
   reportMode: "failures-only"
 };
 
@@ -69,7 +74,8 @@ function normalizeConfig(config, configPath) {
         : null,
       timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_CONFIG.test.timeoutMs
     },
-    enabledVerifiers: enabled.filter((name) => ["tests", "files", "git"].includes(name)),
+    enabledVerifiers: enabled.filter((name) => ["tests", "files", "git", "protected"].includes(name)),
+    protected: normalizeProtectedConfig(config.protected),
     reportMode: config.reportMode === "always" ? "always" : "failures-only"
   };
 }
@@ -81,8 +87,32 @@ function mergeConfig(base, override) {
     test: {
       ...base.test,
       ...(override.test ?? {})
+    },
+    protected: {
+      ...base.protected,
+      ...(override.protected ?? {})
     }
   };
+}
+
+function normalizeProtectedConfig(protectedConfig = {}) {
+  return {
+    allowed: normalizeStringArray(protectedConfig.allowed),
+    skipPaths: normalizeStringArray(protectedConfig.skipPaths, DEFAULT_CONFIG.protected.skipPaths),
+    checkerPath: typeof protectedConfig.checkerPath === "string" && protectedConfig.checkerPath.trim()
+      ? protectedConfig.checkerPath.trim()
+      : null
+  };
+}
+
+function normalizeStringArray(value, fallback = []) {
+  if (!Array.isArray(value)) {
+    return [...fallback];
+  }
+
+  return value
+    .filter((item) => typeof item === "string" && item.trim())
+    .map((item) => item.trim());
 }
 
 function detectTestCommand(cwd) {

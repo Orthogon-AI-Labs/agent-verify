@@ -6,7 +6,9 @@ export function formatBlockReason(results) {
 
   for (const result of failures) {
     lines.push(`- ${result.summary}`);
-    if (result.details) {
+    if (Array.isArray(result.blocks) && result.blocks.length > 0) {
+      lines.push(indentDetails(formatBlocks(result.blocks)));
+    } else if (result.details) {
       lines.push(indentDetails(result.details));
     }
   }
@@ -14,6 +16,12 @@ export function formatBlockReason(results) {
   lines.push("");
   lines.push("Do not claim failed or unverified work succeeded.");
   return lines.join("\n").slice(0, 12000);
+}
+
+function formatBlocks(blocks) {
+  return blocks
+    .map((block) => `${block.path} (block: ${block.name})`)
+    .join("\n");
 }
 
 export function formatTextReport(results) {

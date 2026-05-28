@@ -16,7 +16,9 @@ const verification = await verifyFinalMessage({
   last_assistant_message: message
 });
 
-const actionable = verification.results.filter((result) => result.status === "fail" || result.status === "unknown");
+const actionable = verification.results.filter((result) => {
+  return result.status === "fail" || result.status === "unknown" || result.status === "inconclusive";
+});
 
 if (verification.claims.length === 0) {
   process.stdout.write("Verify notification: no supported completion claims detected.\n");

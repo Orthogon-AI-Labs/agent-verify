@@ -1,6 +1,6 @@
 # Spec 01 — Protected Sections Verifier
 
-**Status:** Implemented
+**Status:** Shipped
 **Lands in:** Verify v1.1
 **Author:** Noah / Orthogon AI Labs
 
@@ -99,14 +99,16 @@ Behavior:
    - `${repoRoot}/.canon/codex/bin/check-protected-sections.py` (canon's Codex install)
    - `${repoRoot}/.canon/bin/check-protected-sections.py` (canon's Claude Code install, if it ever moves out of the plugin dir)
    - `${VERIFY_ROOT}/vendor/check-protected-sections.py` (the vendored fallback — preferred)
-3. **Execute.** Run `python3 <checker> --working-tree` with `--allow <name>` for each name in `config.protected.allowed`. Capture exit code and stdout via the existing `command.mjs` helper.
-4. **Translate exit codes:**
+3. **Execute.** Run `python3 <checker>` with `--allow <name>` for each name in `config.protected.allowed`. Capture exit code and stdout via the existing `command.mjs` helper. The checker takes no mode flag — it always scans both the working tree and the git index.
+4. **Translate the result:**
    - `0` → `{ status: "pass", summary: "Protected sections intact." }`
-   - `1` → `{ status: "fail", summary: "Protected sections modified.", blocks: [...] }` — parse stdout for the file/block list
-   - `2` → `{ status: "inconclusive", summary: "Marker syntax error in <file>: <reason>." }` — surface as warning, not a false claim
-   - `3` or missing `python3` → `{ status: "inconclusive", summary: "Protected-section checker not available. Install canon or check vendor path." }`
+   - `1` → the checker reported one or more failure lines. Parse stdout for the file/block list and return `{ status: "fail", summary: "Protected sections modified.", blocks: [...] }`. **Exception:** the checker also reports *marker syntax errors* (nested, unmatched, or duplicate markers) as failure lines on exit `1`, not as a distinct exit code. When stdout indicates a syntax error, return `status: "inconclusive"` with the file path instead of `fail` — surface it as a warning, not a false claim.
+   - `2` → the checker was not run inside a git repository → `{ status: "inconclusive", summary: "Not a git repository." }`
+   - missing `python3` (spawn error / `null` exit code), or no checker found on the discovery chain → `{ status: "inconclusive", summary: "Protected-section checker not available. Install canon or check vendor path." }`
 
 **Important:** never return `fail` when the checker is missing. A missing dependency is not a lie. `inconclusive` is the right status — it shows up in the report but doesn't block the Stop hook.
+
+> **Checker contract note.** The vendored `check-protected-sections.py` emits **only** exit codes `0`, `1`, and `2` — there is no exit `3`, and exit `2` means "not a git repository" (not a marker syntax error). Marker syntax errors come back as exit-`1` failure lines, so Verify detects them by inspecting stdout (see `hasMarkerSyntaxError` in `protected.mjs`). The checker has **no `--working-tree` flag**; passing one would make argparse abort.
 
 ---
 
@@ -152,6 +154,8 @@ Update `DEFAULT_CONFIG` in `src/core/config.mjs` to include `protected: { allowe
 
 `mergeConfig` and `normalizeConfig` should handle the new key without changes if they currently deep-merge objects; verify that's the case.
 
+**Note on `skipPaths`:** the vendored checker has no path-exclusion logic of its own (it only narrows files via its `*.md` git pathspec). `skipPaths` is therefore applied **Verify-side** — `protected.mjs` filters the parsed block list against `skipPaths` after the checker runs. `allowed` maps directly to the checker's `--allow` flag; `checkerPath` is a Verify-side discovery override. None of these are read from a config file by the checker itself.
+
 ---
 
 ## Acceptance criteria
@@ -163,7 +167,7 @@ The verifier ships when:
 3. Same case but `verify.config.json` has `"protected": { "allowed": ["example"] }` returns `status: "pass"`.
 4. A claim unrelated to protected sections (tests pass, file created) does NOT trigger the protected verifier — `detectClaims` returns no protected-type claim.
 5. With no `python3` on PATH and no vendored checker, the verifier returns `status: "inconclusive"` with a clear summary and does NOT block the Stop hook.
-6. Marker syntax errors (exit 2 from the checker) surface as `status: "inconclusive"` with the file path, not as `status: "fail"`.
+6. Marker syntax errors (nested, unmatched, or duplicate markers — which the checker reports as exit-`1` failure lines, detected via stdout) surface as `status: "inconclusive"` with the file path, not as `status: "fail"`.
 7. `npm test` passes including the new fixtures.
 
 ---

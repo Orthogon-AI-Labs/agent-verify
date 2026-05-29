@@ -1,5 +1,7 @@
 # Verify Plugin — Next Session Handoff (2026-05-27)
 
+> **Update (post-handoff):** Both bugs below are now **FIXED** in the current tree, and the protected-sections verifier (spec 01) has since shipped — so the `508f123` master reference below is stale (HEAD is now past it). Bug 2 (BOM) is covered by `test/file-bom.test.mjs`; Bug 1 (parser narrowness) is covered by the natural-language and bare-path cases in `test/claims.test.mjs` and `scripts/smoke.mjs`. The "two known bugs" section is retained for history.
+
 You are picking up work on the **Verify** Claude Code plugin (catches false completion claims from coding agents — `PostToolUse` records evidence, `Stop` checks the final assistant message). The plugin is V1-shippable with two known bugs documented. This handoff is a snapshot, not a spec.
 
 Repo root: `C:\Users\noah\Documents\obsid\NB VAULT\noahwork\agent-verify`. Master is at `508f123` as of this write-up.
@@ -10,7 +12,7 @@ Repo root: `C:\Users\noah\Documents\obsid\NB VAULT\noahwork\agent-verify`. Maste
 - The two verifier blocking paths that returned INCONCLUSIVE in the original interactive run (Step 4 tests-verifier, Step 5a files-verifier) have since been **directly smoke-tested via `node src/adapters/claude/stop.mjs`** — both PASS with clear actionable block reasons.
 - A fourth real-world catch was observed organically: a commit claim was blocked because the latest commit predated the session. This path wasn't in the original test plan.
 - **No false positives** observed in any run. The plugin's value-prop holds.
-- **Two real bugs surfaced and documented but not yet patched.** Both are V2 work, not V1 blockers.
+- ~~**Two real bugs surfaced and documented but not yet patched.** Both are V2 work, not V1 blockers.~~ **Both bugs are now fixed** — see the resolution notes in the "Two known bugs" section below.
 
 ## What works (confirmed by this run)
 
@@ -25,9 +27,11 @@ Repo root: `C:\Users\noah\Documents\obsid\NB VAULT\noahwork\agent-verify`. Maste
 | Git verifier — commit predates session | Organic catch during this session |
 | PostToolUse evidence path | Step 5b interactive — real Write recorded, no false-positive block |
 
-## Two known bugs (V2 work)
+## Two known bugs (both now FIXED — retained for history)
 
-### Bug 1 — Parser narrowness in `src/core/claims.mjs`
+### Bug 1 — Parser narrowness in `src/core/claims.mjs` — ✅ FIXED
+
+**Resolution:** `TEST_PATTERNS` now allows up to 8 intervening connective words between the test noun and the pass verb (claims.mjs), so "I have run the tests and they all pass" matches. `FILE_PATTERNS` gained a bare-path regex that matches path-like tokens (a `/` or `\` plus a recognizable extension), so `src/never-created.ts` is caught without quotes. Regression coverage: `test/claims.test.mjs` ("natural-language test pass claims", "bare file paths") and `scripts/smoke.mjs`.
 
 The claim-detection regexes are too tight for real Claude phrasings.
 
@@ -36,7 +40,9 @@ The claim-detection regexes are too tight for real Claude phrasings.
 
 Fix direction: widen the test regex to allow N intervening words between noun and verb (with a cap to avoid runaway matches), and add a path-shape heuristic to the file regex for bare paths (something containing `/` or `\`, ending in a recognizable extension). Be conservative — too eager and false positives explode.
 
-### Bug 2 — BOM crash in tests-verifier's `package.json` read
+### Bug 2 — BOM crash in tests-verifier's `package.json` read — ✅ FIXED
+
+**Resolution:** BOM stripping is now centralized in `src/core/json.mjs` (`readTextFile` strips a leading `﻿` before `JSON.parse`), and every file read goes through it. Regression coverage: `test/file-bom.test.mjs` (BOM-prefixed `verify.config.json`, `package.json`, and session-evidence JSON) and the "natural test claim with BOM package.json" case in `scripts/smoke.mjs`.
 
 When `package.json` has a UTF-8 BOM, the verifier's `JSON.parse` throws:
 

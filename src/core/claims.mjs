@@ -24,7 +24,7 @@ const FILE_PATTERNS = [
 const GIT_PATTERNS = [
   {
     action: "committed",
-    regex: /\b(?:committed|created a commit|made a commit)\b/gi
+    regex: /\b(?:committed\s+(?:the\s+|all\s+|my\s+|our\s+|these\s+|those\s+)?(?:changes?|code|files?|fix(?:es)?|work|edits?|updates?|everything|them|it)|committed\s+(?:to|on)\s+(?:git|the\s+repo(?:sitory)?|the\s+branch|main|master|trunk)|(?:created|made)\s+(?:a\s+|the\s+)?commit|git\s+commit)\b/gi
   },
   {
     action: "pushed",

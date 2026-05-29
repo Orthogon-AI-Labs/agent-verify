@@ -7,7 +7,7 @@ export async function verifyTestsClaim({ cwd, config }) {
   if (!testCommand) {
     return {
       verifier: "tests",
-      status: "unknown",
+      status: "inconclusive",
       summary: "Claimed tests passed, but Verify could not find a test command.",
       details: "Add verify.config.json with test.command to enable this check."
     };

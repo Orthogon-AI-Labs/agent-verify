@@ -64,6 +64,8 @@ Both blocking paths work end-to-end when the claim text matches the parser. The 
 
 ### New bugs surfaced by this run
 
+> **Status update (post-run):** Both bugs below have since been **FIXED**. Bug 1 — `TEST_PATTERNS` now allows bounded intervening words and `FILE_PATTERNS` matches bare paths (`test/claims.test.mjs`, `scripts/smoke.mjs`). Bug 2 — BOM stripping is centralized in `src/core/json.mjs` with regression coverage in `test/file-bom.test.mjs`. The original write-ups are kept below for history.
+
 **Bug 1 — Parser narrowness in `src/core/claims.mjs`.** The test-claim regex requires `tests` and the pass-verb to be adjacent. Real Claude phrasings like "the tests passed without issues" or "I have run the tests and they all pass" slip through. The file-claim regex requires the path to be quoted (backtick / single / double), so bare-path mentions like "I updated src/never-created.ts" also slip through. Both are V2 fixes — widen the patterns to allow N intervening words and bare paths with a path-shaped heuristic.
 
 **Bug 2 — BOM crash in tests-verifier's `package.json` read.** When `package.json` has a UTF-8 BOM (which Windows PowerShell 5.1 writes when `Set-Content -Encoding utf8` is used, and which many Windows tools emit), the verifier's `JSON.parse` throws `Unexpected token '﻿'` and verification fails entirely. The stdin-BOM fix that landed pre-handoff (regression test in [test/stdin-bom.test.mjs](test/stdin-bom.test.mjs)) wasn't applied to file reads. Real-world Windows-edited `package.json` files can carry BOMs, so this is a true edge case — not just a test-scaffolding artifact. V2 fix: strip BOM before `JSON.parse` for every file the verifier reads.

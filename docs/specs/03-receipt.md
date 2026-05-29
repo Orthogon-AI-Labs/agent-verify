@@ -1,6 +1,6 @@
 # Spec 03 — Verification receipt
 
-**Status:** Ready for implementation
+**Status:** Shipped
 **Lands in:** Verify v1.2
 **Author:** Noah / Orthogon AI Labs
 

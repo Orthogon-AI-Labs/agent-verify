@@ -1,6 +1,6 @@
 # Spec 02 — Secrets verifier
 
-**Status:** Ready for implementation
+**Status:** Shipped
 **Lands in:** Verify v1.1, alongside protected-sections
 **Author:** Noah / Orthogon AI Labs
 

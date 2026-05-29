@@ -5,8 +5,8 @@ Numbered specs for upcoming Verify work. Each spec includes status, scope, accep
 | # | Title | Status | Lands in |
 |---|---|---|---|
 | 01 | [Protected Sections Verifier](01-protected-sections.md) | Shipped | v1.1 |
-| 02 | [Secrets Verifier](02-secrets.md) | Ready for implementation | v1.1 |
-| 03 | [Verification Receipt](03-receipt.md) | Ready for implementation | v1.2 |
+| 02 | [Secrets Verifier](02-secrets.md) | Shipped | v1.1 |
+| 03 | [Verification Receipt](03-receipt.md) | Shipped | v1.2 |
 
 Build order and the full v1.1 → v2 arc are in [../../ROADMAP.md](../../ROADMAP.md). The positioning rationale behind this roadmap is in [../repositioning-2026-05-29.md](../repositioning-2026-05-29.md).
 

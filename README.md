@@ -32,8 +32,7 @@ Once loaded, Verify runs automatically through Claude Code hooks. It stays quiet
 - **Files** — detects claims like "updated `src/foo.ts`" and checks the file was touched this session.
 - **Git and PRs** — detects claims like "committed", "pushed", or "opened a PR" and checks local git or `gh` when available.
 - **Protected sections** — detects claims like "protected sections are intact" and checks that blocks the user marked protected weren't silently overwritten. Pairs with the [canon](https://github.com/Orthogon-AI-Labs/canon) marker syntax; works standalone via a vendored checker.
-
-A **secrets** verifier ("no secrets committed" / "safe to push") is the next to land — see the roadmap below.
+- **Secrets** — detects claims like "no secrets committed" or "safe to push" and scans the staged diff (and commits ahead of upstream on a push claim) for credential patterns. Reports the file, line, and pattern name — never the secret value.
 
 Tests and types fail loudly; you see red and fix it. Verify is built for the *silent* failures — a quietly overwritten voice-rules block, a "pushed" that never happened. Those are the ones that cost you a week.
 
@@ -72,12 +71,20 @@ Add `verify.config.json` to the project being worked on:
     "command": "npm test",
     "timeoutMs": 120000
   },
-  "enabledVerifiers": ["tests", "files", "git", "protected"],
+  "enabledVerifiers": ["tests", "files", "git", "protected", "secrets"],
   "reportMode": "failures-only",
   "protected": {
     "allowed": [],
     "skipPaths": ["node_modules", "dist", "_archive"],
     "checkerPath": null
+  },
+  "secrets": {
+    "skipPaths": ["node_modules", "dist", "_archive", "*.example", "*.test.*"],
+    "allowPatterns": []
+  },
+  "receipt": {
+    "history": false,
+    "path": ".verify"
   }
 }
 ```
@@ -89,6 +96,16 @@ Config precedence:
 3. autodetected test command
 
 If no test command can be found, Verify marks the test check inconclusive instead of failing the run. The same rule holds for every verifier: a missing dependency is never reported as a lie.
+
+## Verification receipt
+
+After every run, Verify writes a machine-readable receipt to `.verify/last-receipt.json` (gitignored) recording each claim, what was checked, the per-check result, and what was inconclusive. `inconclusive` is kept as its own outcome — never folded into pass or fail — and no secret value or file body is ever stored.
+
+```bash
+agent-verify receipt --print   # dumps the last receipt; exits non-zero iff the last run blocked
+```
+
+Set `"receipt": { "history": true }` to also append one line per run to `.verify/history.jsonl`. The receipt is the foundation for CI mode and any "verified" badge — see the [roadmap](ROADMAP.md).
 
 ## Demo
 

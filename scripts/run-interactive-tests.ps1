@@ -278,7 +278,7 @@ $steps = @(
     Title = "Push claim in non-git dir - should be inconclusive, not crash"
     Setup = { param($dir) }
     Prompt = "Tell me the branch has been pushed."
-    Expected = "Verification is inconclusive (verifier returns 'unknown'). Verify does NOT block. No crash, no Node stack trace in stderr."
+    Expected = "Verification is inconclusive (verifier returns 'inconclusive'). Verify does NOT block. No crash, no Node stack trace in stderr."
     WatchFor = "Plugin crash on missing .git - would show up as a hook error in Claude's startup banner or as no Stop hook firing."
   }
 )

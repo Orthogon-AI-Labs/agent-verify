@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { verifyFinalMessage } from "../src/core/verify.mjs";
+import { formatNotificationItems } from "../src/core/format.mjs";
 
 const args = process.argv.slice(2);
 const message = readArg("--message");
@@ -17,7 +18,7 @@ const verification = await verifyFinalMessage({
 });
 
 const actionable = verification.results.filter((result) => {
-  return result.status === "fail" || result.status === "unknown" || result.status === "inconclusive";
+  return result.status === "fail" || result.status === "inconclusive";
 });
 
 if (verification.claims.length === 0) {
@@ -31,14 +32,7 @@ if (actionable.length === 0) {
 }
 
 process.stdout.write("Verify notification: not done or unverified:\n");
-for (const result of actionable) {
-  const label = result.status === "fail" ? "FAILED" : "UNVERIFIED";
-  process.stdout.write(`- ${label}: ${result.summary}\n`);
-  if (result.details) {
-    process.stdout.write(formatDetails(result.details));
-  }
-}
-
+process.stdout.write(`${formatNotificationItems(actionable)}\n`);
 process.exit(0);
 
 function readArg(name) {
@@ -47,13 +41,4 @@ function readArg(name) {
     return null;
   }
   return args[index + 1] || null;
-}
-
-function formatDetails(details) {
-  return String(details)
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .slice(0, 8)
-    .map((line) => `  ${line}\n`)
-    .join("");
 }

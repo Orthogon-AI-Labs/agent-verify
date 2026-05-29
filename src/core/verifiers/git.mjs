@@ -8,7 +8,7 @@ export async function verifyGitClaim({ cwd, claim, evidence }) {
   if (!isRepo) {
     return {
       verifier: "git",
-      status: "unknown",
+      status: "inconclusive",
       summary: "Claimed git work, but this project is not a git repository."
     };
   }
@@ -27,7 +27,7 @@ export async function verifyGitClaim({ cwd, claim, evidence }) {
 
   return {
     verifier: "git",
-    status: "unknown",
+    status: "inconclusive",
     summary: `Verify does not know how to check git claim: ${claim.text}`
   };
 }
@@ -74,7 +74,7 @@ async function verifyPushed(cwd) {
   if (aheadBehind.exitCode !== 0) {
     return {
       verifier: "git",
-      status: "unknown",
+      status: "inconclusive",
       summary: "Claimed the branch was pushed, but Verify could not compare it to upstream.",
       details: aheadBehind.stderr.trim()
     };
@@ -102,7 +102,7 @@ async function verifyOpenedPr(cwd) {
   if (branch.exitCode !== 0) {
     return {
       verifier: "git",
-      status: "unknown",
+      status: "inconclusive",
       summary: "Claimed a PR was opened, but Verify could not determine the current branch."
     };
   }
@@ -116,7 +116,7 @@ async function verifyOpenedPr(cwd) {
   if (result.exitCode === null) {
     return {
       verifier: "git",
-      status: "unknown",
+      status: "inconclusive",
       summary: "Claimed a PR was opened, but GitHub CLI (`gh`) is not installed or not available."
     };
   }

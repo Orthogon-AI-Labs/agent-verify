@@ -25,20 +25,20 @@ Run Verify when the final answer includes claims like:
 
 From the repository root, run:
 
-```powershell
-npm.cmd run codex:notify -- --message "<final answer draft>"
-```
-
-On non-Windows shells, use:
-
 ```bash
 npm run codex:notify -- --message "<final answer draft>"
 ```
 
-If the user asks to verify a different project, pass its path:
+On Windows shells where `npm` is blocked, use `npm.cmd`:
 
 ```powershell
-npm.cmd run codex:notify -- --cwd "C:\path\to\project" --message "<final answer draft>"
+npm.cmd run codex:notify -- --message "<final answer draft>"
+```
+
+If the user asks to verify a different project, pass its path:
+
+```bash
+npm run codex:notify -- --cwd "/path/to/project" --message "<final answer draft>"
 ```
 
 ## How To Report

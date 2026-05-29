@@ -50,3 +50,13 @@ test("ignores nearby negated git claims", () => {
   const claims = detectClaims("I did not push the branch.");
   assert.equal(claims.some((claim) => claim.type === "git"), false);
 });
+
+test("does not treat the dedication sense of 'committed' as a git claim", () => {
+  const committed = (text) =>
+    detectClaims(text).some((claim) => claim.type === "git" && claim.action === "committed");
+
+  assert.equal(committed("I am committed to clean code."), false);
+  assert.equal(committed("We stay committed to quality and excellence."), false);
+  assert.equal(committed("I committed the changes."), true);
+  assert.equal(committed("I committed to main."), true);
+});

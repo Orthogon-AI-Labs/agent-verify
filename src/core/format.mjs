@@ -24,6 +24,22 @@ function formatBlocks(blocks) {
     .join("\n");
 }
 
+export function formatNotificationItems(results) {
+  const lines = [];
+
+  for (const result of results) {
+    const label = result.status === "fail" ? "FAILED" : "UNVERIFIED";
+    lines.push(`- ${label}: ${result.summary}`);
+    if (Array.isArray(result.blocks) && result.blocks.length > 0) {
+      lines.push(indentDetails(formatBlocks(result.blocks)));
+    } else if (result.details) {
+      lines.push(indentDetails(result.details));
+    }
+  }
+
+  return lines.join("\n").slice(0, 12000);
+}
+
 export function formatTextReport(results) {
   if (results.length === 0) {
     return "Verify found no supported claims.";

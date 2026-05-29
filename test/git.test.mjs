@@ -18,7 +18,7 @@ test("no git repository is inconclusive", async () => {
     }
   });
 
-  assert.equal(result.status, "unknown");
+  assert.equal(result.status, "inconclusive");
 });
 
 test("commit claim fails when repository has no commits", async (t) => {

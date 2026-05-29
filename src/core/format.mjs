@@ -6,10 +6,9 @@ export function formatBlockReason(results) {
 
   for (const result of failures) {
     lines.push(`- ${result.summary}`);
-    if (Array.isArray(result.blocks) && result.blocks.length > 0) {
-      lines.push(indentDetails(formatBlocks(result.blocks)));
-    } else if (result.details) {
-      lines.push(indentDetails(result.details));
+    const evidence = formatEvidence(result);
+    if (evidence) {
+      lines.push(evidence);
     }
   }
 
@@ -30,14 +29,35 @@ export function formatNotificationItems(results) {
   for (const result of results) {
     const label = result.status === "fail" ? "FAILED" : "UNVERIFIED";
     lines.push(`- ${label}: ${result.summary}`);
-    if (Array.isArray(result.blocks) && result.blocks.length > 0) {
-      lines.push(indentDetails(formatBlocks(result.blocks)));
-    } else if (result.details) {
-      lines.push(indentDetails(result.details));
+    const evidence = formatEvidence(result);
+    if (evidence) {
+      lines.push(evidence);
     }
   }
 
   return lines.join("\n").slice(0, 12000);
+}
+
+// Renders a result's supporting evidence (protected blocks, secret hits, or a
+// details string) as an indented list. Never includes a matched secret value —
+// `hits` carries only file, line, and pattern name (spec 02).
+function formatEvidence(result) {
+  if (Array.isArray(result.blocks) && result.blocks.length > 0) {
+    return indentDetails(formatBlocks(result.blocks));
+  }
+  if (Array.isArray(result.hits) && result.hits.length > 0) {
+    return indentDetails(formatHits(result.hits));
+  }
+  if (result.details) {
+    return indentDetails(result.details);
+  }
+  return "";
+}
+
+function formatHits(hits) {
+  return hits
+    .map((hit) => `${hit.file}:${hit.line}  (${hit.pattern})`)
+    .join("\n");
 }
 
 export function formatTextReport(results) {

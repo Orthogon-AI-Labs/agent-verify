@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { verifyFinalMessage } from "../src/core/verify.mjs";
 import { formatNotificationItems } from "../src/core/format.mjs";
+import { writeReceipt } from "../src/core/receipt.mjs";
 
 const args = process.argv.slice(2);
 const message = readArg("--message");
@@ -16,6 +17,12 @@ const verification = await verifyFinalMessage({
   session_id: "codex-notify",
   last_assistant_message: message
 });
+
+try {
+  await writeReceipt(verification, { cwd: verification.cwd, config: verification.config });
+} catch (error) {
+  process.stderr.write(`[agent-verify] could not write receipt: ${error.message}\n`);
+}
 
 const actionable = verification.results.filter((result) => {
   return result.status === "fail" || result.status === "inconclusive";

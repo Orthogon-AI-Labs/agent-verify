@@ -51,6 +51,35 @@ const PROTECTED_SKIP_PATTERNS = [
   /\bafter\s+override:\s+edited\s+protected\b/i
 ];
 
+const SECRET_CLAIM_PATTERNS = [
+  /\b(?:no|zero)\s+secrets?\s+(?:were\s+)?(?:committed|leaked|exposed|included)\b/gi,
+  /\b(?:safe|ok|fine)\s+to\s+push\b/gi,
+  /\b(?:didn't|did\s+not|haven't|have\s+not)\s+(?:commit|include|leak|expose)\s+(?:any\s+)?(?:secrets?|keys?|credentials?|tokens?)\b/gi,
+  /\bno\s+(?:api\s+)?keys?\s+(?:in|were\s+in)\s+(?:the\s+)?(?:diff|commit|changes?)\b/gi,
+  /\b(?:scrubbed|removed|stripped)\s+(?:the\s+)?(?:secrets?|keys?|credentials?)\b/gi
+];
+
+const SECRET_SKIP_PATTERNS = [
+  /\bshould\s+be\s+safe\s+to\s+push\b/i,
+  /\bI\s+think\s+(?:there\s+are\s+)?no\s+secrets?\b/i,
+  /\.env\.example\b/i,
+  /\bplaceholder\b/i,
+  /\bdummy\s+(?:key|secret|token|credential)\b/i,
+  /\bfor\s+the\s+test\s+fixture\b/i
+];
+
+// Credential patterns scanned against added (`+`) lines of a diff. Kept in one
+// exported constant so the list is auditable and extendable (spec 02).
+export const SECRET_PATTERNS = [
+  { name: "anthropic-key", regex: /sk-ant-[A-Za-z0-9_-]{20,}/ },
+  { name: "openai-key", regex: /sk-[A-Za-z0-9]{20,}/ },
+  { name: "stripe-live-key", regex: /sk_live_[A-Za-z0-9]{20,}/ },
+  { name: "github-pat", regex: /ghp_[A-Za-z0-9]{36}/ },
+  { name: "aws-access-key-id", regex: /AKIA[0-9A-Z]{16}/ },
+  { name: "private-key-block", regex: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/ },
+  { name: "jwt", regex: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ }
+];
+
 const NEGATION_WINDOW = 28;
 const NEGATION_PATTERN = /(?:^|[^\w-])(?:not|never|no|didn't|did not|haven't|have not|hasn't|has not|wasn't|was not|won't|will not|cannot|can't)(?=$|[^\w-])/i;
 
@@ -60,7 +89,8 @@ export function detectClaims(message) {
     ...detectTestClaims(text),
     ...detectFileClaims(text),
     ...detectGitClaims(text),
-    ...detectProtectedClaims(text)
+    ...detectProtectedClaims(text),
+    ...detectSecretsClaims(text)
   ]);
 }
 
@@ -149,6 +179,31 @@ function detectProtectedClaims(text) {
   return claims.length > 0 ? [claims[0]] : [];
 }
 
+function detectSecretsClaims(text) {
+  const matches = [];
+
+  for (const regex of SECRET_CLAIM_PATTERNS) {
+    for (const match of text.matchAll(regex)) {
+      const claimText = match[0].trim();
+      const index = match.index ?? 0;
+      if (hasNearbyNegation(text, index) || hasSecretsSkipPhrase(text, index, claimText)) {
+        continue;
+      }
+      matches.push(claimText);
+    }
+  }
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  return [{
+    type: "secrets",
+    text: matches[0],
+    push: matches.some((claimText) => /\bpush\b/i.test(claimText))
+  }];
+}
+
 function cleanClaimedPath(value) {
   return String(value)
     .trim()
@@ -168,6 +223,11 @@ function hasInternalNegation(text) {
 function hasProtectedSkipPhrase(text, index, claimText) {
   const windowText = text.slice(Math.max(0, index - 40), index + claimText.length + 40);
   return PROTECTED_SKIP_PATTERNS.some((regex) => regex.test(windowText));
+}
+
+function hasSecretsSkipPhrase(text, index, claimText) {
+  const windowText = text.slice(Math.max(0, index - 40), index + claimText.length + 40);
+  return SECRET_SKIP_PATTERNS.some((regex) => regex.test(windowText));
 }
 
 function dedupeClaims(claims) {

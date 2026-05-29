@@ -7,11 +7,19 @@ const DEFAULT_CONFIG = {
     command: null,
     timeoutMs: 120000
   },
-  enabledVerifiers: ["tests", "files", "git", "protected"],
+  enabledVerifiers: ["tests", "files", "git", "protected", "secrets"],
   protected: {
     allowed: [],
     skipPaths: ["node_modules", "dist", "_archive"],
     checkerPath: null
+  },
+  secrets: {
+    skipPaths: ["node_modules", "dist", "_archive", "*.example", "*.test.*"],
+    allowPatterns: []
+  },
+  receipt: {
+    history: false,
+    path: ".verify"
   },
   reportMode: "failures-only"
 };
@@ -74,8 +82,10 @@ function normalizeConfig(config, configPath) {
         : null,
       timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_CONFIG.test.timeoutMs
     },
-    enabledVerifiers: enabled.filter((name) => ["tests", "files", "git", "protected"].includes(name)),
+    enabledVerifiers: enabled.filter((name) => ["tests", "files", "git", "protected", "secrets"].includes(name)),
     protected: normalizeProtectedConfig(config.protected),
+    secrets: normalizeSecretsConfig(config.secrets),
+    receipt: normalizeReceiptConfig(config.receipt),
     reportMode: config.reportMode === "always" ? "always" : "failures-only"
   };
 }
@@ -91,6 +101,14 @@ function mergeConfig(base, override) {
     protected: {
       ...base.protected,
       ...(override.protected ?? {})
+    },
+    secrets: {
+      ...base.secrets,
+      ...(override.secrets ?? {})
+    },
+    receipt: {
+      ...base.receipt,
+      ...(override.receipt ?? {})
     }
   };
 }
@@ -102,6 +120,22 @@ function normalizeProtectedConfig(protectedConfig = {}) {
     checkerPath: typeof protectedConfig.checkerPath === "string" && protectedConfig.checkerPath.trim()
       ? protectedConfig.checkerPath.trim()
       : null
+  };
+}
+
+function normalizeSecretsConfig(secretsConfig = {}) {
+  return {
+    skipPaths: normalizeStringArray(secretsConfig.skipPaths, DEFAULT_CONFIG.secrets.skipPaths),
+    allowPatterns: normalizeStringArray(secretsConfig.allowPatterns)
+  };
+}
+
+function normalizeReceiptConfig(receiptConfig = {}) {
+  return {
+    history: receiptConfig.history === true,
+    path: typeof receiptConfig.path === "string" && receiptConfig.path.trim()
+      ? receiptConfig.path.trim()
+      : DEFAULT_CONFIG.receipt.path
   };
 }
 

@@ -2,6 +2,7 @@
 import { readStdinJson, writeJson } from "../../core/io.mjs";
 import { formatBlockReason } from "../../core/format.mjs";
 import { verifyFinalMessage } from "../../core/verify.mjs";
+import { writeReceipt } from "../../core/receipt.mjs";
 
 try {
   const input = await readStdinJson();
@@ -10,6 +11,13 @@ try {
   }
 
   const verification = await verifyFinalMessage(input);
+
+  try {
+    await writeReceipt(verification, { cwd: verification.cwd, config: verification.config });
+  } catch (error) {
+    console.error(`[agent-verify] could not write receipt: ${error.message}`);
+  }
+
   if (!verification.shouldBlock) {
     process.exit(0);
   }

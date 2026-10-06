@@ -8,7 +8,7 @@ Numbered specs for upcoming Verify work. Each spec includes status, scope, accep
 | 02 | [Secrets Verifier](02-secrets.md) | Shipped | v1.1 |
 | 03 | [Verification Receipt](03-receipt.md) | Shipped | v1.2 |
 
-Build order and the full v1.1 → v2 arc are in [../../ROADMAP.md](../../ROADMAP.md). The positioning rationale behind this roadmap is in [../repositioning-2026-05-29.md](../repositioning-2026-05-29.md).
+Build order and the full v1.1 → v2 arc are in [../../ROADMAP.md](../../ROADMAP.md).
 
 ## Conventions
 

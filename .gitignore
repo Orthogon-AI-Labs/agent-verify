@@ -8,3 +8,4 @@ coverage/
 tmp/
 dist/
 .claude/
+TEST_RESULTS.md

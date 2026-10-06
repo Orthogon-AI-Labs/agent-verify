@@ -53,4 +53,3 @@ If Verify reports `No supported completion claims detected.`, no verification no
 
 - Do not treat a Verify notification as a shell failure. The notifier exits 0 even when it finds false claims.
 - Do not run the Claude hook scripts directly for Codex final-answer checks.
-- Do not edit `CLAUDE_TEST_HANDOFF.md` while using this skill.

@@ -10,7 +10,8 @@
     3. Launches an interactive Claude Code session in that fixture with this repo as a plugin.
     4. Prints the prompt to paste, the expected outcome, and what to watch for.
     5. After you exit Claude, asks you for the observed verdict (PASS / FAIL / INCONCLUSIVE)
-       and any notes, then appends a row to TEST_RESULTS.md in this repo.
+       and any notes, then appends a row to TEST_RESULTS.md in this repo (gitignored;
+       created on first run).
 
   Use this when headless `claude --print` can't drive the tests - most commonly because
   the standalone claude.exe isn't logged in (the desktop app's auth doesn't carry over).
@@ -20,7 +21,7 @@
 
 .PARAMETER ClaudePath
   Override the path to claude.exe. Defaults to the newest version under
-  C:\Users\noah\AppData\Roaming\Claude\claude-code\.
+  $env:APPDATA\Claude\claude-code\.
 
 .PARAMETER PluginPath
   Override the plugin path. Defaults to the directory of this script's parent.
@@ -221,7 +222,15 @@ Write-Host "Plugin path:   $plugin"
 Write-Host "Results file:  $resultsFile"
 
 if (-not (Test-Path $resultsFile)) {
-  throw "TEST_RESULTS.md is missing - expected the skeleton to be checked into the repo. Aborting so we don't lose history."
+  # Local, gitignored log. Rows record fixture paths on this machine, so it is never committed.
+  Set-Content -LiteralPath $resultsFile -Value @(
+    "# Verify Plugin - Interactive Test Results",
+    "",
+    "Local log of runs driven by scripts/run-interactive-tests.ps1. Not committed.",
+    "",
+    "| Step | Time | Verdict | Fixture | Notes |",
+    "|---|---|---|---|---|"
+  )
 }
 
 # Add a session-header row so we can tell runs apart in the table.

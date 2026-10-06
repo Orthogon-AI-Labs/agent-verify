@@ -18,7 +18,14 @@ Verify is the thing that grades your agent, so it holds itself to the same stand
 
 ## Install for Claude Code
 
-From this repo:
+In Claude Code:
+
+```text
+/plugin marketplace add Orthogon-AI-Labs/agent-verify
+/plugin install agent-verify@orthogon-ai-labs
+```
+
+Or from a local checkout:
 
 ```bash
 claude --plugin-dir .

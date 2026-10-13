@@ -147,6 +147,46 @@ test("protected verifier is inconclusive when the checker is unavailable", async
   assert.equal(verification.shouldBlock, false);
 });
 
+test("protected verifier is inconclusive when the checker crashes without reporting", async () => {
+  const cwd = await createProtectedRepo();
+  const checker = writeStubChecker("raise RuntimeError('simulated checker crash')\n");
+  fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({
+    protected: { checkerPath: checker }
+  }));
+
+  const verification = await verifyFinalMessage({
+    cwd,
+    session_id: "protected-checker-crash",
+    last_assistant_message: "Protected sections are intact."
+  }, {
+    evidence: emptyEvidence("protected-checker-crash", cwd)
+  });
+
+  const result = verification.results.find((item) => item.verifier === "protected");
+  assert.equal(result.status, "inconclusive");
+  assert.match(result.details, /simulated checker crash/);
+  assert.equal(verification.shouldBlock, false);
+});
+
+test("protected verifier still fails when the checker reports a failure line it can't parse", async () => {
+  const cwd = await createProtectedRepo();
+  const checker = writeStubChecker(
+    "import sys\nprint('[canon protected-sections]')\nprint('x docs/protected.md: some future kind of violation')\nsys.exit(1)\n"
+  );
+  fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({
+    protected: { checkerPath: checker }
+  }));
+
+  const result = await verifyProtectedClaim({
+    cwd,
+    claim,
+    evidence: emptyEvidence("protected-unparsed-failure", cwd),
+    config: loadConfig(cwd)
+  });
+
+  assert.equal(result.status, "fail");
+});
+
 async function createProtectedRepo(options = {}) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-protected-"));
   const files = options.files ?? {
@@ -189,4 +229,11 @@ async function git(cwd, args) {
   const result = await runBinary("git", args, { cwd, timeoutMs: 10000 });
   assert.equal(result.exitCode, 0, result.stderr || result.stdout);
   return result;
+}
+
+function writeStubChecker(source) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-stub-checker-"));
+  const file = path.join(dir, "check-protected-sections.py");
+  fs.writeFileSync(file, source);
+  return file;
 }

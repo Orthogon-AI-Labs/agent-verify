@@ -126,6 +126,39 @@ test("protected verifier lists only modified files in multi-file repos", async (
   assert.deepEqual(result.blocks, [{ path: "multi/a.md", name: "scope" }]);
 });
 
+test("protected verifier catches a changed byte inside a block in Markdown that isn't valid UTF-8", async () => {
+  const cwd = await createProtectedRepo({
+    files: { "docs/protected.md": nonUtf8Block(0xff, 0xff) }
+  });
+  writeFile(path.join(cwd, "docs", "protected.md"), nonUtf8Block(0xfe, 0xff));
+
+  const result = await verifyProtectedClaim({
+    cwd,
+    claim,
+    evidence: emptyEvidence("protected-non-utf8-inside", cwd),
+    config: loadConfig(cwd)
+  });
+
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "docs/protected.md", name: "bytes" }]);
+});
+
+test("protected verifier passes when only bytes outside a block change in Markdown that isn't valid UTF-8", async () => {
+  const cwd = await createProtectedRepo({
+    files: { "docs/protected.md": nonUtf8Block(0xff, 0xff) }
+  });
+  writeFile(path.join(cwd, "docs", "protected.md"), nonUtf8Block(0xff, 0xfe));
+
+  const result = await verifyProtectedClaim({
+    cwd,
+    claim,
+    evidence: emptyEvidence("protected-non-utf8-outside", cwd),
+    config: loadConfig(cwd)
+  });
+
+  assert.equal(result.status, "pass");
+});
+
 test("protected verifier is inconclusive when the checker is unavailable", async () => {
   const cwd = await createProtectedRepo();
   fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({
@@ -183,6 +216,16 @@ function baseBlock(name, body) {
     "<!-- canon:protected:end -->",
     ""
   ].join("\n");
+}
+
+function nonUtf8Block(insideByte, outsideByte) {
+  return Buffer.concat([
+    Buffer.from('# bytes\n\n<!-- canon:protected:start name="bytes" -->\nraw '),
+    Buffer.from([insideByte]),
+    Buffer.from(" byte\n<!-- canon:protected:end -->\n\ntail "),
+    Buffer.from([outsideByte]),
+    Buffer.from("\n")
+  ]);
 }
 
 async function git(cwd, args) {

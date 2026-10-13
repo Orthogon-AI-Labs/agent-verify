@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-__version__ = "canon-0.4.0"
+__version__ = "canon-0.5.0+d2d9eb7"
 
 import argparse
 import re
@@ -36,6 +36,7 @@ def run_git(args: list[str], cwd: Path, check: bool = True) -> subprocess.Comple
         ["git", *args],
         cwd=cwd,
         text=True,
+        errors="surrogateescape",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=check,
@@ -71,7 +72,7 @@ def read_worktree(root: Path, path: Path) -> str:
     full_path = root / path
     if not full_path.exists():
         return ""
-    return full_path.read_text(encoding="utf-8")
+    return full_path.read_text(encoding="utf-8", errors="surrogateescape")
 
 
 def read_index(root: Path, path: Path) -> str:

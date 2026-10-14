@@ -151,4 +151,4 @@ Verify has no runtime npm dependencies. Node 18 or newer is required.
 
 ## Built by
 
-Verify is built by Orthogon AI Labs, a small lab building tools for safer, more reliable agentic coding workflows. It pairs with [canon](https://github.com/Orthogon-AI-Labs/canon): canon writes and protects your project context; Verify checks that the agent respected it.
+Verify is built by Orthogon AI Labs, a small lab building tools for safer, more reliable agentic coding workflows. It pairs with [canon](https://github.com/Orthogon-AI-Labs/canon): canon protects your project context; Verify checks that the agent respected it.

@@ -73,6 +73,17 @@ export async function verifyProtectedClaim({ cwd, claim, config }) {
   if (result.exitCode === 1) {
     const parsedBlocks = parseModifiedBlocks(output);
     if (parsedBlocks.length === 0) {
+      // A crash (an uncaught Python exception) also exits 1, with a traceback and no
+      // failure lines. That is not an observed modification, so it must not block.
+      if (!hasFailureLines(result.stdout)) {
+        return {
+          verifier: "protected",
+          status: "inconclusive",
+          summary: "Claimed protected sections were intact, but the protected-section checker failed without reporting any blocks, so Verify could not check them.",
+          details: output
+        };
+      }
+
       return {
         verifier: "protected",
         status: "fail",
@@ -140,6 +151,10 @@ function parseModifiedBlocks(output) {
   }
 
   return blocks;
+}
+
+function hasFailureLines(stdout) {
+  return /^x\s+/m.test(stdout ?? "");
 }
 
 function filterSkippedBlocks(blocks, skipPaths) {

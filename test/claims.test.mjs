@@ -60,3 +60,27 @@ test("does not treat the dedication sense of 'committed' as a git claim", () => 
   assert.equal(committed("I committed the changes."), true);
   assert.equal(committed("I committed to main."), true);
 });
+
+test("ignores push mentions that say nothing was pushed", () => {
+  const pushed = (text) =>
+    detectClaims(text).some((claim) => claim.type === "git" && claim.action === "pushed");
+
+  assert.equal(pushed("Committed locally; nothing is pushed."), false);
+  assert.equal(pushed("Nothing is committed, pushed or deployed."), false);
+  assert.equal(pushed("Nothing has been committed or pushed."), false);
+  assert.equal(pushed("Nothing is committed, staged or pushed."), false);
+  assert.equal(pushed("None of it is pushed yet."), false);
+  assert.equal(pushed("It isn’t pushed yet."), false);
+  assert.equal(pushed("I pushed nothing and touched no database."), false);
+  assert.equal(pushed("The branch has to be pushed first."), false);
+  assert.equal(pushed("Done. I pushed the branch."), true);
+  assert.equal(pushed("Both are fixed and pushed; nothing is merged."), true);
+});
+
+test("a negation in an earlier sentence or clause doesn't cancel a claim", () => {
+  const has = (text, type) => detectClaims(text).some((claim) => claim.type === type);
+
+  assert.equal(has("Nothing else changed. I pushed the branch.", "git"), true);
+  assert.equal(has("The old build did not run. All 12 tests pass.", "tests"), true);
+  assert.equal(has("I checked that nothing uses them, and its tests pass.", "tests"), true);
+});

@@ -101,7 +101,7 @@ npm run codex:notify -- --message "I ran the tests and they pass."
 agent-verify runs in [Qwen Code](https://github.com/QwenLM/qwen-code) as an extension, with whichever model you use there, including open-weight models you serve yourself. Install it:
 
 ```bash
-qwen extensions install https://github.com/Orthogon-AI-Labs/agent-verify
+qwen extensions install https://github.com/Orthogon-AI-Labs/agent-verify:agent-verify
 ```
 
 I've tested it with Qwen Code 0.26 and Qwen3-Coder 30B running locally in Ollama.

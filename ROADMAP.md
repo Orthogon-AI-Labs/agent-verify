@@ -3,7 +3,7 @@
 **Owner:** Orthogon AI Labs
 **Last updated:** 2026-05-29
 
-This roadmap is ordered as one arc: **from a local Stop hook to the verification layer the agent ecosystem needs.** Each move deepens the same core — verifying the agent's claims — rather than widening into general-purpose linting. If a proposed check doesn't verify a *claim the agent made*, it does not belong in Verify.
+These are ideas for where agent-verify could go, not commitments. Each move deepens the same core — verifying the agent's claims — rather than widening into general-purpose linting. If a proposed check doesn't verify a *claim the agent made*, it does not belong in Verify.
 
 The build order below is the order a coding agent should implement in. Each item links to its spec and its acceptance criteria.
 

@@ -14,6 +14,8 @@ agent-verify blocks the reply:
 Agent:   Correction: the tests fail (`npm test` exits 1), and the branch was not pushed.
 ```
 
+agent-verify is a small, new project. I built it for my own Claude Code work and run it on my projects. It catches some false claims, not all of them, and it can occasionally flag a reply that was correct (see [Limits](#limits)). Issues are welcome.
+
 ## Install
 
 In Claude Code:
@@ -25,7 +27,7 @@ In Claude Code:
 
 Or load a local checkout: `claude --plugin-dir /path/to/agent-verify`.
 
-agent-verify needs Node 18 or newer and has no npm dependencies. Once installed it runs on every reply, and you won't see it unless a claim is false.
+agent-verify needs Node 18 or newer and has no npm dependencies. Once installed it runs at the end of every reply. You'll only see it when it thinks a claim is false.
 
 ## What it checks
 
@@ -44,6 +46,13 @@ The test command comes from `verify.config.json` if you set one. Otherwise agent
 Some claims can't be checked: there's no test command, `python3` or `gh` is missing, or the folder isn't a git repository. Those claims are marked **inconclusive**, not false.
 
 agent-verify blocks a reply at most once and never edits your code. It has no telemetry.
+
+## Limits
+
+- It finds claims by matching common English phrasing. A claim worded another way is missed, and now and then a sentence that isn't a claim is read as one, for example "pushed" used in a non-git sense. When that happens, it can block a correct reply once.
+- A "tests pass" claim makes it run your whole test command, which adds that time to the end of the reply. A run longer than the timeout (2 minutes by default, `test.timeoutMs` in `verify.config.json`) is reported as inconclusive.
+- It checks the project as it is when the reply ends. It can't tell which earlier test run or push the agent was talking about.
+- It only reads the agent's final message.
 
 ## Receipt
 

@@ -81,7 +81,12 @@ export const SECRET_PATTERNS = [
 ];
 
 const NEGATION_WINDOW = 28;
-const NEGATION_PATTERN = /(?:^|[^\w-])(?:not|never|no|didn't|did not|haven't|have not|hasn't|has not|wasn't|was not|won't|will not|cannot|can't)(?=$|[^\w-])/i;
+const NEGATION_LIST_WINDOW = 80;
+const CLAUSE_BREAK = /[.!?;:](?=\s)|\n|,\s+(?:and|but|so)\s/g;
+const NEGATED_LIST_ITEM = /(?:,|\s(?:or|nor))\s*$/i;
+const NOT_DONE_YET = /\b(?:to|will|would|should|must|can|could|might)\s+(?:be|get)\s+$/i;
+const NOTHING_AFTER = /^\s+(?:and\s+\w+\s+)?(?:nothing|none)\b/i;
+const NEGATION_PATTERN = /(?:^|[^\w-])(?:not|never|no|nothing|none|nobody|neither|nor|didn['’]t|doesn['’]t|don['’]t|did not|haven['’]t|have not|hasn['’]t|has not|wasn['’]t|was not|weren['’]t|isn['’]t|aren['’]t|won['’]t|will not|cannot|can['’]t)(?=$|[^\w-])/i;
 
 export function detectClaims(message) {
   const text = String(message ?? "");
@@ -144,7 +149,8 @@ function detectGitClaims(text) {
 
   for (const pattern of GIT_PATTERNS) {
     for (const match of text.matchAll(pattern.regex)) {
-      if (hasNearbyNegation(text, match.index ?? 0)) {
+      const end = (match.index ?? 0) + match[0].length;
+      if (hasNearbyNegation(text, match.index ?? 0) || NOTHING_AFTER.test(text.slice(end, end + 40))) {
         continue;
       }
 
@@ -212,8 +218,27 @@ function cleanClaimedPath(value) {
 }
 
 function hasNearbyNegation(text, index) {
-  const before = text.slice(Math.max(0, index - NEGATION_WINDOW), index);
-  return NEGATION_PATTERN.test(before);
+  const clause = currentClause(text.slice(Math.max(0, index - NEGATION_LIST_WINDOW), index));
+  if (NEGATION_PATTERN.test(clause.slice(-NEGATION_WINDOW))) {
+    return true;
+  }
+
+  // "the branch has to be pushed first" describes work that isn't done.
+  if (NOT_DONE_YET.test(clause)) {
+    return true;
+  }
+
+  // "Nothing is committed, staged or pushed": the claim is an item in a negated list.
+  return NEGATED_LIST_ITEM.test(clause) && NEGATION_PATTERN.test(clause);
+}
+
+// Text after the last sentence or clause break, so a negation earlier in the reply doesn't cancel a later claim.
+function currentClause(before) {
+  let start = 0;
+  for (const match of before.matchAll(CLAUSE_BREAK)) {
+    start = match.index + match[0].length;
+  }
+  return before.slice(start);
 }
 
 function hasInternalNegation(text) {

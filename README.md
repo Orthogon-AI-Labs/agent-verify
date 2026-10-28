@@ -79,7 +79,16 @@ All options and their defaults are in [verify.config.example.json](verify.config
 
 ## Codex
 
-Codex has no hook that runs when a reply ends, so in Codex agent-verify runs as a command instead. The `verify-claims` skill tells Codex to run it before giving a final answer:
+agent-verify runs in [Codex](https://github.com/openai/codex) too, using Codex's own hooks. Install it:
+
+```bash
+codex plugin marketplace add Orthogon-AI-Labs/agent-verify
+codex plugin add agent-verify@orthogon-ai-labs
+```
+
+Codex doesn't run a plugin's hooks until you trust them. Start Codex, run `/hooks`, and trust agent-verify's two hooks. If an update changes the hooks, Codex asks again.
+
+To check a message by hand from a checkout of this repo:
 
 ```bash
 npm run codex:notify -- --message "I ran the tests and they pass."

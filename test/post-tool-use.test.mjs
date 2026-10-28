@@ -26,6 +26,37 @@ test("post-tool-use hook records a touched file as evidence", async () => {
   assert.equal(evidence.touchedFiles[0].tool, "Write");
 });
 
+test("post-tool-use hook records files from a Codex apply_patch", async () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-ptu-"));
+  const dataRoot = path.join(fixture, ".plugin-data");
+
+  await runHook({
+    session_id: "ptu-codex",
+    turn_id: "turn-1",
+    cwd: fixture,
+    tool_name: "apply_patch",
+    tool_input: {
+      command: [
+        "*** Begin Patch",
+        "*** Add File: notes/hello.md",
+        "+hello",
+        "*** Update File: src/app.ts",
+        "*** Move to: src/main.ts",
+        "@@",
+        "-old",
+        "+new",
+        "*** End Patch"
+      ].join("\n")
+    }
+  }, { CLAUDE_PLUGIN_DATA: dataRoot });
+
+  const evidence = readEvidence(dataRoot, "ptu-codex");
+  assert.deepEqual(
+    evidence.touchedFiles.map((entry) => [path.relative(fixture, entry.path), entry.tool]),
+    [["notes/hello.md", "apply_patch"], ["src/app.ts", "apply_patch"], ["src/main.ts", "apply_patch"]]
+  );
+});
+
 test("post-tool-use hook records bash commands and dedupes repeated files", async () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-ptu-"));
   const dataRoot = path.join(fixture, ".plugin-data");

@@ -1,6 +1,6 @@
 const TEST_PATTERNS = [
-  /\b(?:all\s+)?(?:tests?|test suite|unit tests|integration tests)\b(?:\s+(?:and|that|they|all|have|has|had|were|are|is|ran|run|passed|successfully|now|still|also|the|whole|full|entire)){0,8}\s+(?:pass(?:ed|es)?|are passing|is passing|succeeded|green)\b/gi,
-  /\b(?:pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test)\b.{0,50}\b(?:pass(?:ed|es)?|green|succeeded|successful)\b/gi
+  /\b(?:all\s+)?(?:tests?|test suite|unit tests|integration tests)\b(?:\s+(?:and|that|which|they|all|have|has|had|were|are|is|ran|run|passed|successfully|now|still|also|the|whole|full|entire)){0,8}\s+(?:pass(?:ed|es|ing)?|succeeded|green)\b/gi,
+  /\b(?:pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test)\b.{0,50}\b(?:pass(?:ed|es|ing)?|green|succeeded|successful)\b/gi
 ];
 
 const FILE_PATTERNS = [
@@ -82,6 +82,13 @@ export const SECRET_PATTERNS = [
 
 const KNOWN_FILE_EXTENSION = /\.(?:[cm]?[jt]sx?|json[c5l]?|md[cx]?|markdown|txt|rst|adoc|ya?ml|toml|ini|cfg|conf|lock|py|pyi|ipynb|rb|erb|go|rs|java|kt|kts|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|fish|ps1|bat|sql|prisma|graphql|gql|proto|html?|css|scss|sass|less|vue|svelte|astro|xml|svg|png|jpe?g|gif|webp|ico|pdf|csv|tsv|tf|hcl|gradle|dart|lua|exs?|erl|hs|scala|r|jl|nix|zig|example|sample|template|tpl|j2|hbs|njk|liquid|plist|snap|patch|diff|log)$/i;
 const EXTENSIONLESS_FILES = /^(?:Makefile|Dockerfile|Containerfile|Gemfile|Rakefile|Procfile|Justfile|Brewfile|Vagrantfile|LICENSE|NOTICE|README|CHANGELOG|CODEOWNERS|AUTHORS)$/;
+// A sentence that says a test run fails now, e.g. "`npm test` still fails: 1 passes and 1 fails".
+const TEST_SUBJECT = /\b(?:tests?|test suite|suites?|specs?|npm test|pnpm test|yarn test|bun test|cargo test|go test|pytest)\b/i;
+const TEST_FAILURE = /\b(?:still\s+fail(?:s|ing)?|(?:is|are|keeps?|remains?)\s+(?:still\s+)?failing|fails|[1-9]\d*\s+(?:(?:other|more|unrelated|pre-?existing|remaining)\s+)?(?:tests?\s+)?(?:fail(?:s|ing)?|failures?)|failures?\s+(?:is|are)\s+(?:due|because|caused|from|unrelated|expected|pre-?existing))\b/gi;
+// "a test that fails when the fix is removed" describes a check that works, not a failure now.
+const COUNTERFACTUAL = /\b(?:when|if|without|unless|would|remov(?:e|ed|ing)|revert(?:ed|ing)?|mutat(?:e|ed|ion)|break(?:age|ing)?s?|old|before (?:the|my|this) (?:fix|change))\b/i;
+const TABLE_CELL_AFTER = /^[ \t]*\|/;
+const CONDITION_BEFORE = /\b(?:on|for|until|after|before|once)\s+(?:(?:the|all|its|their|[\w-]+['’]s)\s+){0,2}$/i;
 const NEGATION_WINDOW = 28;
 const NEGATION_LIST_WINDOW = 80;
 const CLAUSE_BREAK = /[.!?;:](?=\s)|\n|,\s+(?:and|but|so)\s/g;
@@ -102,6 +109,11 @@ export function detectClaims(message) {
 }
 
 function detectTestClaims(text) {
+  // A reply that already says the tests fail isn't claiming they pass; its "passes" is about part of the suite.
+  if (disclosesTestFailure(text)) {
+    return [];
+  }
+
   const claims = [];
   for (const regex of TEST_PATTERNS) {
     for (const match of text.matchAll(regex)) {
@@ -110,6 +122,12 @@ function detectTestClaims(text) {
       }
 
       if (hasInternalNegation(match[0])) {
+        continue;
+      }
+
+      // "| Tests passing |" is a table heading; "merge once the tests pass" is a condition.
+      const end = (match.index ?? 0) + match[0].length;
+      if (TABLE_CELL_AFTER.test(text.slice(end)) || CONDITION_BEFORE.test(text.slice(Math.max(0, (match.index ?? 0) - 40), match.index))) {
         continue;
       }
 
@@ -233,6 +251,13 @@ function cleanClaimedPath(value) {
     .trim()
     .replace(/^[`'"]+|[`'",.;:]+$/g, "")
     .replace(/^\.[\\/]+/, "");
+}
+
+function disclosesTestFailure(text) {
+  return text.split(/(?<=[.!?])\s+|\n+/).some((sentence) =>
+    TEST_SUBJECT.test(sentence) &&
+    !COUNTERFACTUAL.test(sentence) &&
+    [...sentence.matchAll(TEST_FAILURE)].some((match) => !hasNearbyNegation(sentence, match.index)));
 }
 
 function hasNearbyNegation(text, index) {

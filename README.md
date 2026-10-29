@@ -58,7 +58,7 @@ agent-verify blocks a reply at most once and never edits your code. It has no te
 
 ## Receipt
 
-Each check writes `.verify/last-receipt.json`, which is added to `.gitignore` automatically. It lists every claim, what was checked and the result. It never stores a secret's value or a file's contents.
+Each check writes `.verify/last-receipt.json`. It lists every claim, what was checked and the result. It never stores a secret's value or a file's contents. The `.verify/` folder has its own `.gitignore`, so git ignores it without any change to your project's `.gitignore`. (Versions before 1.4.1 added a `.verify/` line to your `.gitignore`; you can delete that line.)
 
 To print it, run this from a checkout of this repo (exit code is non-zero if the last reply was blocked):
 

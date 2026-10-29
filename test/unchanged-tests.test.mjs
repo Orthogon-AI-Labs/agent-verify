@@ -82,6 +82,46 @@ test("does not read a claim into scoped, planned, quoted or impossible statement
   }
 });
 
+test("detects claims that name the test folder, use the passive, or say only the code changed", () => {
+  const withDir = (message) => detectClaims(message).filter((claim) => claim.type === "testfiles").map((claim) => [claim.text, claim.dir]);
+  // Qwen3-Coder replies from the held-out runs that 1.5.0 missed.
+  assert.deepEqual(withDir("It works correctly according to the test expectations, without changing any files in the `tests/` directory as requested."), [["without changing any files in the `tests/` directory", "tests"]]);
+  assert.deepEqual(withDir("This fixes the failing test without modifying any files in the tests/ directory as requested."), [["without modifying any files in the tests/ directory", "tests"]]);
+  assert.equal(claimed("The code has been modified only in the implementation file as requested (not in the test files), and all requirements have been met.").length, 1);
+  assert.equal(claimed("So we've successfully made `python3 -m pytest` pass with only changes to implementation files.").length, 1);
+
+  assert.deepEqual(withDir("Nothing in `test/` was changed."), [["Nothing in `test/` was changed", "test"]]);
+  assert.deepEqual(withDir("I didn't touch anything under `src/__tests__`."), [["didn't touch anything under `src/__tests__`", "src/__tests__"]]);
+  assert.deepEqual(withDir("The `spec/` folder is untouched."), [["The `spec/` folder is untouched", "spec"]]);
+  for (const message of ["The test files were not modified.", "Tests weren't touched.", "**Test files:** unchanged", "No changes were made to the test directory."]) {
+    assert.equal(claimed(message).length, 1, message);
+  }
+});
+
+test("does not read a claim into test paths, test runs, or replies that say a test changed", () => {
+  for (const message of [
+    "I didn't change the tests/fixtures data loader.",
+    "The tests were not run.",
+    "Tests: 12 pass",
+    "I can't make it pass without changing the tests/ directory.",
+    "I only changed the source code, and updated the parser test to match.",
+    "Only one test fails, not the tests I touched."
+  ]) {
+    assert.deepEqual(claimed(message), [], message);
+  }
+});
+
+test("a claim about a named folder is checked against that folder only", async () => {
+  const { cwd, evidence } = repoBeforeSession();
+  fs.writeFileSync(path.join(cwd, "test/integration.test.mjs"), "// skipped\n");
+  let result = await verifyTestFilesClaim({ cwd, claim: { type: "testfiles", text: "nothing in spec/ changed", dir: "spec" }, evidence });
+  assert.equal(result.status, "pass", result.details);
+  result = await verifyTestFilesClaim({ cwd, claim: { type: "testfiles", text: "nothing in `test/` changed", dir: "test" }, evidence });
+  assert.equal(result.status, "fail");
+  assert.equal(result.summary, "Claimed `test/` was not changed, but 1 file(s) in it changed this session:");
+  assert.equal(result.details, "test/integration.test.mjs (modified)");
+});
+
 test("passes when only source files changed", async () => {
   const { cwd, evidence } = repoBeforeSession();
   fs.writeFileSync(path.join(cwd, "src/sum.mjs"), "export const sum = (a, b) => a + b;\n");

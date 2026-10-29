@@ -14,14 +14,15 @@ export function isTestPath(relativePath) {
 }
 
 // Checks "I didn't change the tests" against git: test files that are modified, deleted or renamed now, compared with
-// the last commit before this session, and that were edited this session. New test files don't count.
-export async function verifyTestFilesClaim({ cwd, evidence }) {
+// the last commit before this session, and that were edited this session. New test files don't count. A claim that
+// names a folder ("nothing in \`tests/\` changed") is checked against every file in that folder instead.
+export async function verifyTestFilesClaim({ cwd, claim = {}, evidence }) {
   const top = await git(cwd, ["rev-parse", "--show-toplevel"]);
   if (top.exitCode !== 0) {
     return {
       verifier: "testfiles",
       status: "inconclusive",
-      summary: "Claimed the tests were not changed, but this project is not a git repository."
+      summary: `${claimed(claim)}, but this project is not a git repository.`
     };
   }
 
@@ -33,30 +34,42 @@ export async function verifyTestFilesClaim({ cwd, evidence }) {
     return {
       verifier: "testfiles",
       status: "inconclusive",
-      summary: "Claimed the tests were not changed, but Verify could not read the git diff.",
+      summary: `${claimed(claim)}, but Verify could not read the git diff.`,
       details: diff.stderr.trim()
     };
   }
 
   const touched = new Set(evidence.touchedFiles.map((entry) => realPath(entry.path)));
+  const dirPrefix = claim.dir ? repoPrefix(root, cwd, claim.dir) : null;
+  const inScope = (file) => (dirPrefix ? file.startsWith(dirPrefix) : isTestPath(file));
   const changed = parseNameStatus(diff.stdout)
-    .filter((entry) => isTestPath(entry.path) && entry.status !== "A" && entry.status !== "C")
+    .filter((entry) => inScope(entry.path) && entry.status !== "A" && entry.status !== "C")
     .filter((entry) => changedThisSession(root, entry, touched, startedAtMs));
 
   if (changed.length === 0) {
     return {
       verifier: "testfiles",
       status: "pass",
-      summary: "Claimed the tests were not changed, and git shows no test file changed this session."
+      summary: `${claimed(claim)}, and git shows no ${claim.dir ? "file in it" : "test file"} changed this session.`
     };
   }
 
   return {
     verifier: "testfiles",
     status: "fail",
-    summary: `Claimed the tests were not changed, but ${changed.length} test file(s) changed this session:`,
+    summary: `${claimed(claim)}, but ${changed.length} ${claim.dir ? "file(s) in it" : "test file(s)"} changed this session:`,
     details: changed.map(describe).join("\n")
   };
+}
+
+function claimed(claim) {
+  return claim.dir ? `Claimed \`${claim.dir}/\` was not changed` : "Claimed the tests were not changed";
+}
+
+// The claimed folder as a path prefix relative to the repo root, the form git diff prints.
+function repoPrefix(root, cwd, dir) {
+  const relative = path.relative(root, path.resolve(realPath(cwd), dir)).split(path.sep).join("/");
+  return `${relative.replace(/\/+$/, "")}/`;
 }
 
 async function sessionBase(root, startedAtMs) {

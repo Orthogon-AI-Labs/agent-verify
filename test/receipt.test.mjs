@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -87,14 +87,29 @@ test("history:true appends one line per run; history:false writes no history fil
   assert.equal(fs.existsSync(path.join(offDir, ".verify", "history.jsonl")), false);
 });
 
-test("adds .verify/ to .gitignore once and does not duplicate it", async () => {
+test("keeps .verify/ out of git without editing the project's .gitignore", { skip: process.platform === "win32" }, async () => {
   const cwd = tempDir();
+  const git = (...args) => spawnSync("git", args, { cwd, encoding: "utf8" });
+  git("init", "-q");
+  fs.writeFileSync(path.join(cwd, ".gitignore"), "node_modules/");
+  git("add", ".gitignore");
+  git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init");
+
   await writeReceipt(mixedVerification(cwd, configWith()), { cwd, config: configWith() });
   await writeReceipt(mixedVerification(cwd, configWith()), { cwd, config: configWith() });
 
-  const gitignore = fs.readFileSync(path.join(cwd, ".gitignore"), "utf8");
-  const occurrences = gitignore.split(/\r?\n/).filter((line) => line.trim() === ".verify/").length;
-  assert.equal(occurrences, 1);
+  assert.equal(fs.readFileSync(path.join(cwd, ".gitignore"), "utf8"), "node_modules/");
+  assert.equal(git("status", "--porcelain", "--untracked-files=all").stdout, "");
+  assert.equal(git("check-ignore", ".verify/last-receipt.json").status, 0);
+});
+
+test("leaves an existing .verify/.gitignore alone", async () => {
+  const cwd = tempDir();
+  fs.mkdirSync(path.join(cwd, ".verify"));
+  fs.writeFileSync(path.join(cwd, ".verify", ".gitignore"), "last-receipt.json\n");
+  await writeReceipt(mixedVerification(cwd, configWith()), { cwd, config: configWith() });
+  assert.equal(fs.readFileSync(path.join(cwd, ".verify", ".gitignore"), "utf8"), "last-receipt.json\n");
+  assert.equal(fs.existsSync(path.join(cwd, ".gitignore")), false);
 });
 
 test("verify receipt --print exits non-zero iff the last run blocked", async () => {

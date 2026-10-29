@@ -71,7 +71,7 @@ Design rules:
 In:
 - Write `.verify/last-receipt.json` after each run (overwrite).
 - Optional `.verify/history.jsonl` append, gated by `config.receipt.history` (default `false`).
-- On first run, add `.verify/` to the project `.gitignore` (idempotent — skip if already present). The receipt is never committed.
+- On first run, write `.verify/.gitignore` containing `*` (skip if it exists), so git ignores the folder without any edit to the project's own `.gitignore`. The receipt is never committed.
 - A `verify receipt --print` command that dumps the last receipt; exit code non-zero iff the last run blocked (so CI can use it as a gate in Move 3).
 - `receipt` block in `DEFAULT_CONFIG`.
 
@@ -95,7 +95,7 @@ Not in:
 2. No secret value or file body appears anywhere in the receipt, even when the secrets verifier failed.
 3. `verify receipt --print` outputs the last receipt; exit code is non-zero iff the last run blocked.
 4. With `config.receipt.history: true`, each run appends exactly one line to `history.jsonl`; with it `false` (default), no history file is created.
-5. `.verify/` is present in the project `.gitignore` after the first run, and the entry is not duplicated on subsequent runs.
+5. After two runs in a git repo, `git status` shows nothing under `.verify/` and the project `.gitignore` is byte-for-byte unchanged.
 6. `npm test` passes including the new fixtures.
 
 ---
@@ -117,7 +117,7 @@ Not in:
 - secrets-fail run → assert no matched value string appears anywhere in the serialized receipt (criterion 2)
 - `history: true` → two runs produce a two-line `history.jsonl`
 - `history: false` → no `history.jsonl` created
-- `.gitignore` absent then present → `.verify/` added once, not duplicated on a second run
+- git repo with a `.gitignore` → two runs leave it unchanged and `git status --porcelain` empty; an existing `.verify/.gitignore` is not overwritten
 - `verify receipt --print` exit code: blocked run → non-zero; clean run → zero
 
 ---
@@ -127,7 +127,7 @@ Not in:
 1. Add the `receipt` block to `DEFAULT_CONFIG`.
 2. Build the receipt object from the verifier results already collected in `verify.mjs` (the dispatcher has every claim + status at close — assemble there).
 3. Write `last-receipt.json` (overwrite) and, if `config.receipt.history`, append to `history.jsonl`. Reuse a serialization helper that strips any field carrying a value/body before write (defense for criterion 2).
-4. Ensure `.verify/` is in `.gitignore` (idempotent insert).
+4. Write `.verify/.gitignore` with `*` if it is missing.
 5. Add the `verify receipt --print` command with the gate exit code.
 6. Ship `test/receipt.test.mjs` with the cases above.
 7. Smoke: `npm test`, `npm run check`, `npm run demo`, `npm run smoke`.

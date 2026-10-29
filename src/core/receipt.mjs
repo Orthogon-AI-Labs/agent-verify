@@ -62,7 +62,7 @@ export async function writeReceipt(verification, options = {}) {
     fs.appendFileSync(path.join(receiptDir, "history.jsonl"), `${JSON.stringify(receipt)}\n`);
   }
 
-  ensureGitignored(root, receiptDirName);
+  ensureIgnoredByGit(receiptDir);
   return receipt;
 }
 
@@ -137,21 +137,12 @@ async function collectRepoInfo(root) {
   };
 }
 
-function ensureGitignored(root, receiptDirName) {
-  const entry = `${String(receiptDirName).replace(/\/+$/, "")}/`;
-  const gitignorePath = path.join(root, ".gitignore");
-
-  let current = "";
-  if (fs.existsSync(gitignorePath)) {
-    current = fs.readFileSync(gitignorePath, "utf8");
-    const lines = current.split(/\r?\n/).map((line) => line.trim());
-    if (lines.includes(entry) || lines.includes(receiptDirName)) {
-      return;
-    }
+// Git ignores the receipt folder through a .gitignore inside it, so the project's own .gitignore is never edited.
+function ensureIgnoredByGit(receiptDir) {
+  const ignoreFile = path.join(receiptDir, ".gitignore");
+  if (!fs.existsSync(ignoreFile)) {
+    fs.writeFileSync(ignoreFile, "# Written by agent-verify. Keeps this folder out of git.\n*\n");
   }
-
-  const prefix = current && !current.endsWith("\n") ? "\n" : "";
-  fs.appendFileSync(gitignorePath, `${prefix}${entry}\n`);
 }
 
 function getVerifyVersion() {

@@ -46,8 +46,9 @@ export async function verifyFinalMessage(input, options = {}) {
     }
   }
 
-  if (claims.some((claim) => claim.type === "testfiles") && isVerifierEnabled(config, "testfiles")) {
-    results.push(await verifyTestFilesClaim({ cwd, evidence }));
+  const testFilesClaim = claims.find((claim) => claim.type === "testfiles");
+  if (testFilesClaim && isVerifierEnabled(config, "testfiles")) {
+    results.push(await verifyTestFilesClaim({ cwd, claim: testFilesClaim, evidence }));
   }
 
   return {

@@ -8,7 +8,7 @@ const DEFAULT_CONFIG = {
     command: null,
     timeoutMs: 120000
   },
-  enabledVerifiers: ["tests", "files", "git", "protected", "secrets"],
+  enabledVerifiers: ["tests", "files", "git", "protected", "secrets", "testfiles"],
   protected: {
     allowed: [],
     skipPaths: ["node_modules", "dist", "_archive"],
@@ -83,7 +83,7 @@ function normalizeConfig(config, configPath) {
         : null,
       timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_CONFIG.test.timeoutMs
     },
-    enabledVerifiers: enabled.filter((name) => ["tests", "files", "git", "protected", "secrets"].includes(name)),
+    enabledVerifiers: enabled.filter((name) => DEFAULT_CONFIG.enabledVerifiers.includes(name)),
     protected: normalizeProtectedConfig(config.protected),
     secrets: normalizeSecretsConfig(config.secrets),
     receipt: normalizeReceiptConfig(config.receipt),

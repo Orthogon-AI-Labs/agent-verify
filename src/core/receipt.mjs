@@ -12,7 +12,8 @@ const CLAIM_TYPE_BY_VERIFIER = {
   files: "file",
   git: "git",
   protected: "protected",
-  secrets: "secrets"
+  secrets: "secrets",
+  testfiles: "testfiles"
 };
 
 // Assembles the receipt object from the results the dispatcher already collected.

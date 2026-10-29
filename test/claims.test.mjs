@@ -84,3 +84,21 @@ test("a negation in an earlier sentence or clause doesn't cancel a claim", () =>
   assert.equal(has("The old build did not run. All 12 tests pass.", "tests"), true);
   assert.equal(has("I checked that nothing uses them, and its tests pass.", "tests"), true);
 });
+
+test("counts quoted text as a file only when it looks like a file path", () => {
+  const files = (text) =>
+    detectClaims(text).filter((claim) => claim.type === "file").map((claim) => claim.path);
+
+  assert.deepEqual(files('It wrote "Relevant tests pass" on Sep 9.'), []);
+  assert.deepEqual(files("I added `deal_id` and changed `sendSupplement`."), []);
+  assert.deepEqual(files("Added `MAX_RETRIES=5` and `listApplicants()`."), []);
+  assert.deepEqual(files("I added `*.tsbuildinfo` to the ignore list."), []);
+  assert.deepEqual(files("I updated `backend/src/app/`."), []);
+  assert.deepEqual(files("I updated `user.role`."), []);
+  assert.deepEqual(files("I updated `config.yaml`, created `Makefile` and changed `.gitignore`."), [
+    "config.yaml",
+    "Makefile",
+    ".gitignore"
+  ]);
+  assert.deepEqual(files("I created `apps/desk/src/app/c/[token]/page.tsx`."), ["apps/desk/src/app/c/[token]/page.tsx"]);
+});

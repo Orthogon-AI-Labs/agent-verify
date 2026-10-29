@@ -80,6 +80,8 @@ export const SECRET_PATTERNS = [
   { name: "jwt", regex: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ }
 ];
 
+const KNOWN_FILE_EXTENSION = /\.(?:[cm]?[jt]sx?|json[c5l]?|md[cx]?|markdown|txt|rst|adoc|ya?ml|toml|ini|cfg|conf|lock|py|pyi|ipynb|rb|erb|go|rs|java|kt|kts|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|fish|ps1|bat|sql|prisma|graphql|gql|proto|html?|css|scss|sass|less|vue|svelte|astro|xml|svg|png|jpe?g|gif|webp|ico|pdf|csv|tsv|tf|hcl|gradle|dart|lua|exs?|erl|hs|scala|r|jl|nix|zig|example|sample|template|tpl|j2|hbs|njk|liquid|plist|snap|patch|diff|log)$/i;
+const EXTENSIONLESS_FILES = /^(?:Makefile|Dockerfile|Containerfile|Gemfile|Rakefile|Procfile|Justfile|Brewfile|Vagrantfile|LICENSE|NOTICE|README|CHANGELOG|CODEOWNERS|AUTHORS)$/;
 const NEGATION_WINDOW = 28;
 const NEGATION_LIST_WINDOW = 80;
 const CLAUSE_BREAK = /[.!?;:](?=\s)|\n|,\s+(?:and|but|so)\s/g;
@@ -141,7 +143,23 @@ function detectFileClaims(text) {
     }
   }
 
-  return claims.filter((claim) => claim.path.length > 0);
+  return claims.filter((claim) => looksLikeFilePath(claim.path));
+}
+
+// Quoted text after "added" or "changed" is often a name, a value or a phrase ("added `deal_id`",
+// wrote "yes"). Only count it as a file when it looks like one.
+function looksLikeFilePath(value) {
+  if (value.length === 0 || /\s|:\/\/|\*/.test(value)) {
+    return false;
+  }
+
+  const parts = value.split(/[\\/]/);
+  const name = parts.pop();
+  if (parts.length > 0) {
+    return /\.[A-Za-z0-9]{1,12}$/.test(name) || EXTENSIONLESS_FILES.test(name) || /^\.[\w.-]+$/.test(name);
+  }
+
+  return KNOWN_FILE_EXTENSION.test(name) || EXTENSIONLESS_FILES.test(name) || /^\.[\w.-]+$/.test(name);
 }
 
 function detectGitClaims(text) {

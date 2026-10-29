@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readJsonFile } from "./json.mjs";
+import { findExecutable } from "./command.mjs";
 
 const DEFAULT_CONFIG = {
   test: {
@@ -180,7 +181,7 @@ function detectTestCommand(cwd) {
 
   if (hasPythonTestMarkers(root)) {
     return {
-      command: "python -m pytest -q",
+      command: `${pythonFor(root)} -m pytest -q`,
       source: "autodetect:pytest"
     };
   }
@@ -199,6 +200,17 @@ function detectPackageManager(root) {
     return "bun";
   }
   return "npm";
+}
+
+// The project's virtualenv if it has one, then python3, which is the only Python on macOS and many Linux installs.
+function pythonFor(root) {
+  for (const venv of [".venv", "venv"]) {
+    const python = process.platform === "win32" ? path.join(venv, "Scripts", "python.exe") : path.join(venv, "bin", "python");
+    if (fs.existsSync(path.join(root, python))) {
+      return python;
+    }
+  }
+  return process.platform !== "win32" && findExecutable("python3") ? "python3" : "python";
 }
 
 function hasPythonTestMarkers(root) {

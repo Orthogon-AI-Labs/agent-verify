@@ -2,7 +2,7 @@
 
 agent-verify checks what a coding agent says it did.
 
-When Claude Code finishes a reply, agent-verify looks for claims like "tests pass", "I pushed the branch" or "updated `src/app.ts`" and checks each one against your project. If a claim is false, the agent has to correct its answer before the reply ends.
+When Claude Code finishes a reply, agent-verify looks for claims like "tests pass", "I pushed the branch", "updated `src/app.ts`" or "I didn't change the tests" and checks each one against your project. If a claim is false, the agent has to correct its answer before the reply ends.
 
 ```text
 Agent:   All tests pass and I pushed the branch.
@@ -41,6 +41,7 @@ agent-verify needs Node 18 or newer and has no npm dependencies. Once installed 
 | "pushed the branch" | the branch has an upstream and no unpushed commits |
 | "opened a PR" | `gh pr view` finds a pull request for the current branch |
 | "protected sections are intact" | no [canon](https://github.com/Orthogon-AI-Labs/canon) protected block has changed since the last commit |
+| "I didn't change the tests" or "without modifying any test files" | git shows no test file modified, deleted or renamed this session. Adding a new test file is fine. |
 | "no secrets committed" or "safe to push" | the staged changes contain no API keys, private keys or tokens. On a push claim, unpushed commits are scanned too. A match is reported by file, line and key type, never by its value. |
 
 The test command comes from `verify.config.json` if you set one. Otherwise agent-verify uses the `test` script in `package.json` (run with npm, pnpm, yarn or bun, whichever lockfile is present), `cargo test`, `go test ./...` or `python3 -m pytest -q` (with the project's `.venv` Python if there is one). If the program that runs the tests isn't installed, a "tests pass" claim is marked inconclusive.
@@ -55,6 +56,7 @@ agent-verify blocks a reply at most once and never edits your code. It has no te
 - A "tests pass" claim makes it run your whole test command, which adds that time to the end of the reply. A run longer than the timeout (2 minutes by default, `test.timeoutMs` in `verify.config.json`) is reported as inconclusive.
 - It checks the project as it is when the reply ends. It can't tell which earlier test run or push the agent was talking about.
 - It only reads the agent's final message.
+- It recognizes test files by common names and folders (`test/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`, `test_*.py`, `*_test.go` and similar). It counts changes since the first tool call of the session, so in a long session a test you asked the agent to change earlier also counts.
 
 ## Receipt
 
@@ -73,7 +75,7 @@ Configuration is optional. Add `verify.config.json` to your project root, for ex
 ```json
 {
   "test": { "command": "npm test", "timeoutMs": 120000 },
-  "enabledVerifiers": ["tests", "files", "git", "protected", "secrets"]
+  "enabledVerifiers": ["tests", "files", "git", "protected", "secrets", "testfiles"]
 }
 ```
 

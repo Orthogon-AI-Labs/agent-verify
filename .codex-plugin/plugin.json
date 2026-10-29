@@ -1,6 +1,6 @@
 {
   "name": "agent-verify",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Verify reports false or unverified completion claims from coding agents.",
   "author": {
     "name": "Orthogon AI Labs"

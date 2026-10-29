@@ -6,6 +6,7 @@ import { verifyFileClaim } from "./verifiers/files.mjs";
 import { verifyGitClaim } from "./verifiers/git.mjs";
 import { verifyProtectedClaim } from "./verifiers/protected.mjs";
 import { verifySecretsClaim } from "./verifiers/secrets.mjs";
+import { verifyTestFilesClaim } from "./verifiers/unchanged-tests.mjs";
 
 export async function verifyFinalMessage(input, options = {}) {
   const cwd = input.cwd || process.cwd();
@@ -43,6 +44,10 @@ export async function verifyFinalMessage(input, options = {}) {
     for (const claim of claims.filter((item) => item.type === "secrets")) {
       results.push(await verifySecretsClaim({ cwd, claim, evidence, config }));
     }
+  }
+
+  if (claims.some((claim) => claim.type === "testfiles") && isVerifierEnabled(config, "testfiles")) {
+    results.push(await verifyTestFilesClaim({ cwd, evidence }));
   }
 
   return {

@@ -89,6 +89,22 @@ const TEST_FAILURE = /\b(?:still\s+fail(?:s|ing)?|(?:is|are|keeps?|remains?)\s+(
 const COUNTERFACTUAL = /\b(?:when|if|without|unless|would|remov(?:e|ed|ing)|revert(?:ed|ing)?|mutat(?:e|ed|ion)|break(?:age|ing)?s?|old|before (?:the|my|this) (?:fix|change))\b/i;
 const TABLE_CELL_AFTER = /^[ \t]*\|/;
 const CONDITION_BEFORE = /\b(?:on|for|until|after|before|once)\s+(?:(?:the|all|its|their|[\w-]+['’]s)\s+){0,2}$/i;
+// "Without changing any test files", "I did not modify the tests", "the test files are unchanged".
+// Only claims about the tests as a whole: a claim about one named test or a scoped set is left alone.
+const UNTOUCHED_TEST_OBJECT = String.raw`(?:any\s+(?:of\s+(?:the\s+)?)?|the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:(?:existing|original|current|provided|given|failing)\s+)?(?:test\s+files?|test\s+code|test\s+suites?|test\s+cases?|spec\s+files?|tests?)\b(?!['’]s|\s+(?:command|script|runner|output|results?|logic|config\w*|setup|names?|expectations?|assertions?|behaviou?r|timeouts?|harness|data|helpers?|utilit\w*|env\w*|coverage|run|framework)\b)`;
+const UNTOUCHED_CHANGE_VERB = String.raw`(?:chang|modif|edit|touch|alter|rewrit|weaken)\w*`;
+const CLAUSE_START = String.raw`(?<=^|[.!?;:\n]\s*|[-*•]\s+|,\s+|\b(?:and|but|so|while)\s+)`;
+const UNTOUCHED_TEST_PATTERNS = [
+  new RegExp(String.raw`\bwithout\s+${UNTOUCHED_CHANGE_VERB}\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
+  new RegExp(String.raw`\b(?:did\s+not|didn['’]t|have\s+not|haven['’]t|never)\s+${UNTOUCHED_CHANGE_VERB}\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
+  new RegExp(String.raw`\bno\s+(?:changes?|modifications?|edits?)\s+(?:(?:were|was|have\s+been|has\s+been)\s+)?(?:made\s+)?to\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
+  new RegExp(String.raw`${CLAUSE_START}(?:no|none\s+of\s+the)\s+(?:test\s+files?|tests?)\s+(?:were|was|have\s+been|has\s+been)\s+${UNTOUCHED_CHANGE_VERB}`, "gi"),
+  new RegExp(String.raw`${CLAUSE_START}(?:the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:test\s+files?|test\s+code|test\s+suite|tests?)\s+(?:are|were|remain(?:ed)?|stay(?:ed)?|is|was|have\s+been|has\s+been)\s+(?:left\s+)?(?:unchanged|untouched|unmodified|intact)\b`, "gi"),
+  new RegExp(String.raw`\bleft\s+(?:the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:test\s+files?|test\s+code|tests?)\s+(?:alone|unchanged|untouched|as[- ]is)\b`, "gi")
+];
+// Not a claim about this reply's work: inability, a plan, a condition, or the user's request.
+const UNTOUCHED_NOT_A_CLAIM = /\b(?:can['’]?t|cannot|could\s?n['’]?t|could\s+not|unable|impossible|no\s+way|not\s+possible|would|need(?:s|ed)?\s+to|requires?|required|must|should|have\s+to|has\s+to|will|['’]ll|won['’]t|let\s+me|going\s+to|plan(?:s|ned)?|try|tried|trying|attempt\w*|if|unless|whether|how\s+to|asked|told|instructed|request(?:s|ed)?\s+(?:me|that))\b/i;
+const UNTOUCHED_SCOPE_AFTER = /^\s*(?:(?:in|under|inside|for|of|from)\s+(?!(?:this|the)\s+(?:repo|repository|project|codebase|change|pr|pull\s+request|commit|branch|process|fix|task)\b)|,?\s*(?:except|other\s+than|apart\s+from|aside\s+from|besides|beyond|but\s+(?:for|only))\b)/i;
 const NEGATION_WINDOW = 28;
 const NEGATION_LIST_WINDOW = 80;
 const CLAUSE_BREAK = /[.!?;:](?=\s)|\n|,\s+(?:and|but|so)\s/g;
@@ -104,7 +120,8 @@ export function detectClaims(message) {
     ...detectFileClaims(text),
     ...detectGitClaims(text),
     ...detectProtectedClaims(text),
-    ...detectSecretsClaims(text)
+    ...detectSecretsClaims(text),
+    ...detectUntouchedTestClaims(text)
   ]);
 }
 
@@ -219,6 +236,31 @@ function detectProtectedClaims(text) {
   }
 
   return claims.length > 0 ? [claims[0]] : [];
+}
+
+function detectUntouchedTestClaims(text) {
+  for (const regex of UNTOUCHED_TEST_PATTERNS) {
+    for (const match of text.matchAll(regex)) {
+      const index = match.index ?? 0;
+      const sentenceStart = Math.max(text.lastIndexOf("\n", index), ...[". ", "! ", "? "].map((stop) => text.lastIndexOf(stop, index))) + 1;
+      const sentenceEnd = text.slice(index).search(/[.!?](?:\s|$)|\n/);
+      const before = text.slice(sentenceStart, index);
+      const after = text.slice(index + match[0].length);
+      const lineBefore = text.slice(text.lastIndexOf("\n", index) + 1, index);
+      if (UNTOUCHED_NOT_A_CLAIM.test(before) || UNTOUCHED_SCOPE_AFTER.test(after)) {
+        continue;
+      }
+      if (sentenceEnd >= 0 && text[index + sentenceEnd] === "?") {
+        continue;
+      }
+      // Quoted speech ("then said \"without changing any test files\"") reports someone else's claim.
+      if ((lineBefore.match(/["“”]/g) ?? []).length % 2 === 1) {
+        continue;
+      }
+      return [{ type: "testfiles", text: match[0].trim() }];
+    }
+  }
+  return [];
 }
 
 function detectSecretsClaims(text) {

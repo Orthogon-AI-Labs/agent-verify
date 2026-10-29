@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 const DEFAULT_MAX_OUTPUT_CHARS = 12000;
 
@@ -131,4 +133,32 @@ function appendCapped(current, chunk, maxChars) {
     return next;
   }
   return next.slice(next.length - maxChars);
+}
+
+// The program a shell command starts with (after any VAR=value prefixes), unquoted.
+export function commandProgram(command) {
+  const match = String(command).match(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:"([^"]+)"|'([^']+)'|(\S+))/);
+  return match ? match[1] ?? match[2] ?? match[3] : null;
+}
+
+// Full path of an installed program, resolved like a shell would: a path with a slash relative to cwd, otherwise via PATH.
+export function findExecutable(program, cwd = process.cwd()) {
+  if (!program) {
+    return null;
+  }
+  const extensions = process.platform === "win32" ? ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")] : [""];
+  const candidates = /[\\/]/.test(program)
+    ? [path.resolve(cwd, program)]
+    : (process.env.PATH ?? "").split(path.delimiter).filter(Boolean).map((dir) => path.join(dir, program));
+  for (const candidate of candidates.flatMap((file) => extensions.map((ext) => file + ext))) {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      if (fs.statSync(candidate).isFile()) {
+        return candidate;
+      }
+    } catch {
+      // not here
+    }
+  }
+  return null;
 }

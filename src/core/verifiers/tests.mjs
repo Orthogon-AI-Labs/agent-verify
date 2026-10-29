@@ -1,5 +1,5 @@
 import { resolveTestCommand } from "../config.mjs";
-import { runShellCommand, summarizeOutput } from "../command.mjs";
+import { commandProgram, findExecutable, runShellCommand, summarizeOutput } from "../command.mjs";
 
 export async function verifyTestsClaim({ cwd, config }) {
   const testCommand = resolveTestCommand(cwd, config);
@@ -30,6 +30,19 @@ export async function verifyTestsClaim({ cwd, config }) {
   }
 
   const combinedOutput = summarizeOutput(`${result.stdout}\n${result.stderr}`.trim());
+
+  // "Command not found" from the shell says nothing about the tests: the program that runs them isn't installed.
+  const program = commandProgram(testCommand.command);
+  if ((result.exitCode === 127 || result.exitCode === 9009) && !findExecutable(program, cwd)) {
+    return {
+      verifier: "tests",
+      status: "inconclusive",
+      summary: `Claimed tests passed, but \`${program}\` is not installed, so Verify could not run \`${testCommand.command}\`.`,
+      details: combinedOutput,
+      command: testCommand.command,
+      exitCode: result.exitCode
+    };
+  }
   const reason = result.timedOut
     ? `timed out after ${testCommand.timeoutMs}ms`
     : `exited ${result.exitCode}`;

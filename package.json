@@ -1,6 +1,6 @@
 {
   "name": "agent-verify",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Verify catches false completion claims from coding agents.",
   "type": "module",
   "license": "MIT",

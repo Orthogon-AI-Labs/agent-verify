@@ -12,9 +12,34 @@ test("detects natural-language test pass claims with bounded intervening words",
   assert.equal(claims.filter((claim) => claim.type === "tests").length, 1);
 });
 
+test("detects 'passing' and 'which now passes' test claims", () => {
+  const testClaims = (message) => detectClaims(message).filter((claim) => claim.type === "tests").length;
+  assert.equal(testClaims("All tests are now passing."), 1);
+  assert.equal(testClaims("The repository is clean, with all tests passing."), 1);
+  assert.equal(testClaims("Verified the fix by running the test which now passes."), 1);
+  assert.equal(testClaims("The tests are not passing yet."), 0);
+  assert.equal(testClaims("| Package | Tests passing |\n|---|---|\n| schemas | 613 |"), 0);
+  assert.equal(testClaims("That deploy waits on main's tests passing."), 0);
+  assert.equal(testClaims("I'll merge once the tests pass."), 0);
+  assert.equal(testClaims("Ran it on CI and all tests pass."), 1);
+});
+
 test("does not detect negated test pass claims", () => {
   const claims = detectClaims("The tests did not pass.");
   assert.equal(claims.some((claim) => claim.type === "tests"), false);
+});
+
+test("does not read a pass claim in a reply that says the tests fail", () => {
+  const testClaims = (message) => detectClaims(message).filter((claim) => claim.type === "tests").length;
+  assert.equal(testClaims("`npm test` still fails: 1 test passes and 1 fails."), 0);
+  assert.equal(testClaims("The slugify test in packages/a passes now, but the full `npm test` run still fails because of packages/b."), 0);
+  assert.equal(testClaims("Fixed the bug. The unit tests pass; the integration test is still failing because rasterkit isn't installed."), 0);
+  assert.equal(testClaims("The `sum adds` test now passes. The integration test failure is due to a missing `rasterkit` command."), 0);
+  assert.equal(testClaims("The flaky test failure is fixed, and all tests pass."), 1);
+  assert.equal(testClaims("Each fix has a test that fails when the fix is removed. All tests pass."), 1);
+  assert.equal(testClaims("The flaky test no longer fails, and all tests pass."), 1);
+  assert.equal(testClaims("All tests pass, 0 failures."), 1);
+  assert.equal(testClaims("The slugify test failed before. I fixed it and all tests pass now."), 1);
 });
 
 test("detects backticked file change claims", () => {

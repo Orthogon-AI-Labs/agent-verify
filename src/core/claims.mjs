@@ -113,7 +113,18 @@ const UNTOUCHED_TEST_PATTERNS = [
   new RegExp(String.raw`\b(?:did\s+not|didn['’]t|have\s+not|haven['’]t|never)\s+${UNTOUCHED_CHANGE_VERB}\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
   new RegExp(String.raw`\bno\s+(?:changes?|modifications?|edits?)\s+(?:(?:were|was|have\s+been|has\s+been)\s+)?(?:made\s+)?(?:to|in|under)\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
   new RegExp(String.raw`${CLAUSE_START}nothing\s+(?:in|under|inside)\s+${UNTOUCHED_TEST_DIR}\s+(?:(?:was|has\s+been|got)\s+)?${UNTOUCHED_CHANGE_VERB}`, "gi"),
-  new RegExp(String.raw`${CLAUSE_START}${UNTOUCHED_TEST_DIR}\s+(?:is|was|remains|remained|stayed|has\s+been)\s+(?:left\s+)?(?:unchanged|untouched|unmodified|intact)\b`, "gi")
+  new RegExp(String.raw`${CLAUSE_START}${UNTOUCHED_TEST_DIR}\s+(?:is|was|remains|remained|stayed|has\s+been)\s+(?:left\s+)?(?:unchanged|untouched|unmodified|intact)\b`, "gi"),
+  // "Leaving the tests as they were", "keeping the repository tests intact", "keeping all test files read-only".
+  new RegExp(String.raw`\b(?:left|leaving|kept|keeping)\s+(?:the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:(?:existing|original|repository|repo|provided|given)\s+)?(?:test\s+files?|test\s+code|test\s+suite|tests?)\s+(?:(?:exactly\s+)?as\s+(?:they|it)\s+(?:were|was|are|is)\b|intact\b|read[- ]only\b|unmodified\b|unchanged\b|untouched\b)`, "gi"),
+  // "While preserving all the original tests".
+  new RegExp(String.raw`\b(?:preserv|maintain)(?:ing|ed)\s+(?:all\s+(?:of\s+)?)?(?:the\s+)?(?:existing|original)\s+(?:test\s+files?|tests?)\b(?!['’]s|\s+(?:expectations?|assertions?|behaviou?r|names?|coverage)\b)`, "gi"),
+  // "Without requiring any changes to test files", "with no changes to the tests".
+  new RegExp(String.raw`\b(?:without|with\s+no)\s+(?:(?:requiring|needing|making)\s+)?(?:any\s+)?(?:changes?|modifications?|edits?)\s+(?:to|in)\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
+  new RegExp(String.raw`\b(?:without|with\s+no)\s+(?:(?:requiring|needing|making)\s+)?(?:any\s+)?(?:changes?|modifications?|edits?)\s+(?:to|in|under)\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
+  // "No files in the test folder were modified".
+  new RegExp(String.raw`${CLAUSE_START}no\s+files?\s+(?:in|under|inside|within)\s+${UNTOUCHED_TEST_DIR}\s+(?:were|was|have\s+been|has\s+been)\s+${UNTOUCHED_CHANGE_VERB}`, "gi"),
+  // "Respecting the constraint that test files should not be modified", "... not to modify anything in the test folder".
+  new RegExp(String.raw`\b(?:respect|honou?r|follow|obey)(?:ing|ed)\s+(?:the|your)\s+(?:constraint|requirement|rule|instructions?|restriction)\s+(?:that\s+(?:the\s+|all\s+)?(?:test\s+files?|test\s+code|tests?)\s+(?:should|must|could|can|may|were\s+to)\s*(?:not|n['’]t)\s+(?:be\s+)?${UNTOUCHED_CHANGE_VERB}|(?:not\s+to|to\s+not)\s+${UNTOUCHED_CHANGE_VERB}\s+(?:${UNTOUCHED_TEST_OBJECT}|${UNTOUCHED_DIR_OBJECT}))`, "gi")
 ];
 // Saying only the code changed: "modified only in the implementation file (not in the test files)",
 // "with only changes to implementation files". Skipped when the reply also says a test was changed.

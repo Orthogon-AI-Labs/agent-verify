@@ -27,6 +27,8 @@ In Claude Code:
 
 Or load a local checkout: `claude --plugin-dir /path/to/agent-verify`.
 
+It also runs in [Codex](#codex) and [Qwen Code](#qwen-code).
+
 agent-verify needs Node 18 or newer and has no npm dependencies. Once installed it runs at the end of every reply. You'll only see it when it thinks a claim is false.
 
 ## What it checks
@@ -93,6 +95,16 @@ To check a message by hand from a checkout of this repo:
 ```bash
 npm run codex:notify -- --message "I ran the tests and they pass."
 ```
+
+## Qwen Code
+
+agent-verify runs in [Qwen Code](https://github.com/QwenLM/qwen-code) as an extension, with whichever model you use there, including open-weight models you serve yourself. Install it:
+
+```bash
+qwen extensions install https://github.com/Orthogon-AI-Labs/agent-verify:agent-verify
+```
+
+I've tested it with Qwen Code 0.26 and Qwen3-Coder 30B running locally in Ollama.
 
 ## Development
 

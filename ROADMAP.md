@@ -59,8 +59,8 @@ A GitHub Action (or equivalent) that regenerates the receipt against the PR HEAD
 **Status:** not yet specced. Sequence after 2a.
 Let projects define their own claim→check pairs (deploy succeeded, health check green, migration applied). Turns Verify from a fixed checklist into the place a team encodes "what counts as done here." Only worth building once the receipt gives custom verifiers a stable artifact to write into.
 
-### 3c. Breadth: Cursor adapter, native Codex enforcement
-**Status:** lower priority — ship after the trust-layer story (1+2+3a) is real.
+### 3c. Breadth: more agents
+**Status:** Codex (1.3.0) and Qwen Code (1.4.0) run the same hooks. A Cursor adapter is still open, at lower priority than the trust-layer story (1+2+3a).
 These widen the surface; they don't deepen the moat. The depth (security verifier + receipt + CI) is the story that makes the adapters worth installing. Migration verifiers (Alembic, Prisma, Rails, Django), language-aware symbol verification, and local verification history slot in here as registry instances or follow-ons.
 
 ---
@@ -70,7 +70,7 @@ These widen the surface; they don't deepen the moat. The depth (security verifie
 1. **Spec 01 — protected-sections.** Done — shipped and live.
 2. **Spec 02 — secrets.** Next. Hard rule: matched secret values never reach output. Ship as **v1.1**.
 3. **Spec 03 — receipt.** Implement once secrets is live, so the receipt has the full claim set to record. Ship as **v1.2**. Verify criterion: no secret value or file body appears in the receipt.
-4. **Spec 04 — CI mode** (write the spec only after 03 ships and the schema is stable), then the **custom verifier registry**, then **Cursor/Codex breadth**. This is **v2**.
+4. **Spec 04 — CI mode** (write the spec only after 03 ships and the schema is stable), then the **custom verifier registry**, then **Cursor**. This is **v2**.
 
 Do not reorder 3 before 2 (the receipt needs the full claim set) or CI mode before 3 (CI consumes the receipt).
 

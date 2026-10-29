@@ -99,5 +99,12 @@ function extractTouchedFiles(input) {
     return [toolInput.file_path];
   }
 
+  // Codex reports file edits as apply_patch, with the patch text in tool_input.command.
+  if (input.tool_name === "apply_patch" && typeof toolInput.command === "string") {
+    return [...toolInput.command.matchAll(PATCH_FILE_HEADER)].map((match) => match[1].trim());
+  }
+
   return [];
 }
+
+const PATCH_FILE_HEADER = /^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm;

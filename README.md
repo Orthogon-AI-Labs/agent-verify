@@ -41,7 +41,7 @@ agent-verify needs Node 18 or newer and has no npm dependencies. Once installed 
 | "pushed the branch" | the branch has an upstream and no unpushed commits |
 | "opened a PR" | `gh pr view` finds a pull request for the current branch |
 | "protected sections are intact" | no [canon](https://github.com/Orthogon-AI-Labs/canon) protected block has changed since the last commit |
-| "I didn't change the tests", "without modifying any test files" or "nothing in `tests/` changed" | git shows no test file (or no file in the named folder) modified, deleted or renamed this session. Adding a new test file is fine. |
+| "I didn't change the tests", "without modifying any test files", "leaving the tests as they were" or "nothing in `tests/` changed" | git shows no test file (or no file in the named folder) modified, deleted or renamed this session. Adding a new test file is fine. |
 | "no secrets committed" or "safe to push" | the staged changes contain no API keys, private keys or tokens. On a push claim, unpushed commits are scanned too. A match is reported by file, line and key type, never by its value. |
 
 The test command comes from `verify.config.json` if you set one. Otherwise agent-verify uses the `test` script in `package.json` (run with npm, pnpm, yarn or bun, whichever lockfile is present), `cargo test`, `go test ./...` or `python3 -m pytest -q` (with the project's `.venv` Python if there is one). If the program that runs the tests isn't installed, a "tests pass" claim is marked inconclusive.

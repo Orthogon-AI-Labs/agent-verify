@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-__version__ = "canon-0.5.0+d2d9eb7"
+__version__ = "canon-0.6.0+e18787c"
 
 import argparse
 import re
@@ -53,12 +53,21 @@ def changed_markdown_files(root: Path, cached: bool = False) -> list[Path]:
     args = ["diff"]
     if cached:
         args.append("--cached")
-    args.extend(["--name-only", "--", "*.md"])
+    # -z: paths verbatim (without it git C-quotes non-ASCII names, which then match no file).
+    # --no-renames: a renamed file shows as its old path deleted, so its blocks count as removed.
+    # icase: NOTES.MD is Markdown too.
+    args.extend(["--name-only", "-z", "--no-renames", "--", ":(icase)*.md"])
     result = run_git(args, root)
-    for line in result.stdout.splitlines():
-        if line.strip():
-            names.add(line.strip())
+    for name in result.stdout.split("\0"):
+        if name:
+            names.add(name)
     return [Path(name) for name in sorted(names)]
+
+
+def unmerged_files(root: Path) -> set[Path]:
+    """Paths with merge conflicts. Their index has no stage 0 to compare, only the working tree."""
+    result = run_git(["ls-files", "--unmerged", "-z"], root, check=False)
+    return {Path(entry.split("\t", 1)[1]) for entry in result.stdout.split("\0") if "\t" in entry}
 
 
 def read_head(root: Path, path: Path) -> str:
@@ -82,6 +91,11 @@ def read_index(root: Path, path: Path) -> str:
     return result.stdout
 
 
+def marker_text(line: str) -> str:
+    # A UTF-8 byte order mark before a first-line marker is not part of the marker.
+    return line.strip().lstrip("\ufeff").strip()
+
+
 def parse_blocks(text: str) -> dict[str, Block]:
     blocks: dict[str, Block] = {}
     active_name: str | None = None
@@ -89,8 +103,8 @@ def parse_blocks(text: str) -> dict[str, Block]:
     active_body: list[str] = []
 
     for line_number, line in enumerate(text.splitlines(keepends=True), start=1):
-        start = START_RE.fullmatch(line.strip())
-        end = END_RE.fullmatch(line.strip())
+        start = START_RE.fullmatch(marker_text(line))
+        end = END_RE.fullmatch(marker_text(line))
 
         if start:
             if active_name is not None:
@@ -127,18 +141,35 @@ def parse_blocks(text: str) -> dict[str, Block]:
     return blocks
 
 
-def compare_file(root: Path, path: Path, current_text: str, source_label: str, allowed: set[str]) -> list[str]:
+def parse_blocks_lenient(text: str) -> dict[str, list[Block]]:
+    """Every block that still parses when markers are broken, by name.
+
+    An end marker with no open block is skipped, and a start marker inside an open block
+    drops the open one. A name maps to more than one block when it appears more than once.
+    For text that parse_blocks accepts, each name maps to that one block.
+    """
+    blocks: dict[str, list[Block]] = {}
+    active_name: str | None = None
+    active_start_line = 0
+    active_body: list[str] = []
+
+    for line_number, line in enumerate(text.splitlines(keepends=True), start=1):
+        start = START_RE.fullmatch(marker_text(line))
+        if start:
+            active_name, active_start_line, active_body = start.group(1), line_number, []
+        elif END_RE.fullmatch(marker_text(line)):
+            if active_name is not None:
+                blocks.setdefault(active_name, []).append(
+                    Block(active_name, "".join(active_body), active_start_line, line_number)
+                )
+            active_name = None
+        elif active_name is not None:
+            active_body.append(line)
+    return blocks
+
+
+def compare_blocks(path: Path, base_blocks: dict, current_blocks: dict, source_label: str, allowed: set[str]) -> list[str]:
     failures: list[str] = []
-    try:
-        base_blocks = parse_blocks(read_head(root, path))
-    except ParseError as exc:
-        return [f'{path}: invalid protected marker syntax in HEAD: {exc}']
-
-    try:
-        current_blocks = parse_blocks(current_text)
-    except ParseError as exc:
-        return [f'{path}: invalid protected marker syntax in {source_label}: {exc}']
-
     for name, base_block in base_blocks.items():
         if name in allowed:
             continue
@@ -158,6 +189,26 @@ def compare_file(root: Path, path: Path, current_text: str, source_label: str, a
     return failures
 
 
+def compare_file(root: Path, path: Path, current_text: str, source_label: str, allowed: set[str]) -> list[str]:
+    head_text = read_head(root, path)
+    try:
+        base_blocks = parse_blocks(head_text)
+    except ParseError as exc:
+        return [f'{path}: invalid protected marker syntax in HEAD: {exc}']
+
+    try:
+        current_blocks = parse_blocks(current_text)
+    except ParseError as exc:
+        # Report the broken markers, and still check every block that can be found, so a
+        # broken marker can't hide a change to another block in the same file.
+        lenient = {name: found[0] for name, found in parse_blocks_lenient(current_text).items() if len(found) == 1}
+        return [f'{path}: invalid protected marker syntax in {source_label}: {exc}'] + compare_blocks(
+            path, base_blocks, lenient, source_label, allowed
+        )
+
+    return compare_blocks(path, base_blocks, current_blocks, source_label, allowed)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Check changed Markdown files for edits to canon protected blocks."
@@ -170,6 +221,8 @@ def main() -> int:
         help="Allow a specific protected block name to differ from HEAD.",
     )
     args = parser.parse_args()
+    # Block names and paths can hold bytes that aren't UTF-8; print them escaped rather than crash mid-report.
+    sys.stdout.reconfigure(errors="backslashreplace")
 
     try:
         root = repo_root()
@@ -181,8 +234,10 @@ def main() -> int:
     allowed = set(args.allow)
     for path in changed_markdown_files(root, cached=False):
         failures.extend(compare_file(root, path, read_worktree(root, path), "working tree", allowed))
+    unmerged = unmerged_files(root)
     for path in changed_markdown_files(root, cached=True):
-        failures.extend(compare_file(root, path, read_index(root, path), "index", allowed))
+        if path not in unmerged:
+            failures.extend(compare_file(root, path, read_index(root, path), "index", allowed))
 
     print("[canon protected-sections]")
     if not failures:

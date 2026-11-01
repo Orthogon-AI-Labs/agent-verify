@@ -278,22 +278,30 @@ function detectProtectedClaims(text) {
 
 function detectUntouchedTestClaims(text) {
   const implied = DISCLOSES_TEST_EDIT.test(text) ? [] : UNTOUCHED_IMPLIED_PATTERNS;
+  // Sentence and line boundaries are found once, not rescanned for every match, so a long sentence
+  // holding many skipped matches stays linear.
+  let marks;
+  const notAClaimEnds = new Map();
   for (const regex of [...UNTOUCHED_TEST_PATTERNS, ...implied]) {
     for (const match of text.matchAll(regex)) {
       const index = match.index ?? 0;
-      const sentenceStart = Math.max(text.lastIndexOf("\n", index), ...[". ", "! ", "? "].map((stop) => text.lastIndexOf(stop, index))) + 1;
-      const sentenceEnd = text.slice(index).search(/[.!?](?:\s|$)|\n/);
-      const before = text.slice(sentenceStart, index);
+      marks ??= sentenceMarks(text);
+      // The last "\n", ". ", "! " or "? " at or before the match, and the first sentence end at or after it.
+      const sentenceStart = (marks.breaks[lowerBound(marks.breaks, index + 1) - 1] ?? -1) + 1;
+      const sentenceEnd = marks.ends[lowerBound(marks.ends, index)];
+      const lineStart = (marks.newlines[lowerBound(marks.newlines, index + 1) - 1] ?? -1) + 1;
       const after = text.slice(index + match[0].length);
-      const lineBefore = text.slice(text.lastIndexOf("\n", index) + 1, index);
-      if (UNTOUCHED_NOT_A_CLAIM.test(before) || UNTOUCHED_SCOPE_AFTER.test(after)) {
+      if (UNTOUCHED_SCOPE_AFTER.test(after)) {
         continue;
       }
-      if (sentenceEnd >= 0 && text[index + sentenceEnd] === "?") {
+      if (text[sentenceEnd] === "?") {
         continue;
       }
       // Quoted speech ("then said \"without changing any test files\"") reports someone else's claim.
-      if ((lineBefore.match(/["“”]/g) ?? []).length % 2 === 1) {
+      if (lineStart < index && (lowerBound(marks.quotes, index) - lowerBound(marks.quotes, lineStart)) % 2 === 1) {
+        continue;
+      }
+      if (notAClaimBefore(text, sentenceStart, index, notAClaimEnds)) {
         continue;
       }
       const dir = match.groups?.dir ?? match.groups?.qdir;
@@ -301,6 +309,48 @@ function detectUntouchedTestClaims(text) {
     }
   }
   return [];
+}
+
+function sentenceMarks(text) {
+  const positions = (regex) => [...text.matchAll(regex)].map((match) => match.index);
+  return {
+    newlines: positions(/\n/g),
+    breaks: positions(/\n|[.!?](?= )/g),
+    ends: positions(/[.!?](?=\s|$)|\n/g),
+    quotes: positions(/["“”]/g)
+  };
+}
+
+// Index of the first sorted position that is >= value.
+function lowerBound(sorted, value) {
+  let low = 0;
+  let high = sorted.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (sorted[mid] < value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+// UNTOUCHED_NOT_A_CLAIM in the sentence before the match. A word found before an earlier match of the
+// same sentence is also before this one, so its end is remembered instead of searching the sentence again.
+function notAClaimBefore(text, sentenceStart, index, foundEnds) {
+  if (foundEnds.get(sentenceStart) < index) {
+    return true;
+  }
+  const found = UNTOUCHED_NOT_A_CLAIM.exec(text.slice(sentenceStart, index));
+  if (!found) {
+    return false;
+  }
+  const end = sentenceStart + found.index + found[0].length;
+  if (end < index) {
+    foundEnds.set(sentenceStart, Math.min(end, foundEnds.get(sentenceStart) ?? end));
+  }
+  return true;
 }
 
 function detectSecretsClaims(text) {

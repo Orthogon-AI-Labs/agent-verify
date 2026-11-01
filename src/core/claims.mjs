@@ -93,7 +93,13 @@ const CONDITION_BEFORE = /\b(?:on|for|until|after|before|once)\s+(?:(?:the|all|i
 // Only claims about the tests as a whole: a claim about one named test or a scoped set is left alone.
 const UNTOUCHED_TEST_OBJECT = String.raw`(?:any\s+(?:of\s+(?:the\s+)?)?|the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:(?:existing|original|current|provided|given|failing)\s+)?(?:test\s+files?|test\s+code|test\s+suites?|test\s+cases?|spec\s+files?|tests?)\b(?!['’]s|\/|\s+(?:command|script|runner|output|results?|logic|config\w*|setup|names?|expectations?|assertions?|behaviou?r|timeouts?|harness|data|helpers?|utilit\w*|env\w*|coverage|run|framework)\b)`;
 const UNTOUCHED_CHANGE_VERB = String.raw`(?:chang|modif|edit|touch|alter|rewrit|weaken)\w*`;
-const CLAUSE_START = String.raw`(?<=^|[.!?;:\n]\s*|[-*•]\s+|,\s+|\b(?:and|but|so|while)\s+)`;
+// `(?=\S)` first: every pattern using this starts with a non-space, and it stops the lookbehind
+// rescanning a run of whitespace at each position of it (quadratic on long blank runs).
+const CLAUSE_START = String.raw`(?=\S)(?<=^|[.!?;:\n]\s*|[-*•]\s+|,\s+|\b(?:and|but|so|while)\s+)`;
+// Every "." is a clause start, so a test folder path like "a.b/c.d/tests/" would be rescanned from
+// each dot in it. A start after a dot gives the same result as the start after the previous dot of
+// the same path, unless it is in the path's last segment with no dot after it: skip the rest.
+const REPEAT_PATH_START = String.raw`(?!(?<=\.)(?=\.|[\w-]+(?:\.|\/[\w.-]))(?<=\.(?=[\w.-])(?:[\w.-]|\/(?!\/))*?\.))`;
 // A test folder named in a claim. The captured path limits the check to that folder.
 const UNTOUCHED_TEST_DIR = String.raw`(?:the\s+)?(?:[\x60'"]?(?:\.\/)?(?<dir>(?:[\w.-]+\/)*(?:tests?|__tests__|specs?|e2e))\/(?![\w.-])[\x60'"]?(?:\s+(?:directory|folder|dir))?|\x60(?<qdir>(?:[\w.-]+\/)*(?:tests?|__tests__|specs?|e2e))\x60(?:\s+(?:directory|folder|dir))?|(?:tests?|__tests__|spec)\s+(?:directory|folder|dir))`;
 const UNTOUCHED_DIR_OBJECT = String.raw`(?:(?:any|all)\s+(?:of\s+)?(?:the\s+)?)?(?:(?:files?|anything|code)\s+(?:in|under|inside|within)\s+)?${UNTOUCHED_TEST_DIR}`;
@@ -113,7 +119,7 @@ const UNTOUCHED_TEST_PATTERNS = [
   new RegExp(String.raw`\b(?:did\s+not|didn['’]t|have\s+not|haven['’]t|never)\s+${UNTOUCHED_CHANGE_VERB}\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
   new RegExp(String.raw`\bno\s+(?:changes?|modifications?|edits?)\s+(?:(?:were|was|have\s+been|has\s+been)\s+)?(?:made\s+)?(?:to|in|under)\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
   new RegExp(String.raw`${CLAUSE_START}nothing\s+(?:in|under|inside)\s+${UNTOUCHED_TEST_DIR}\s+(?:(?:was|has\s+been|got)\s+)?${UNTOUCHED_CHANGE_VERB}`, "gi"),
-  new RegExp(String.raw`${CLAUSE_START}${UNTOUCHED_TEST_DIR}\s+(?:is|was|remains|remained|stayed|has\s+been)\s+(?:left\s+)?(?:unchanged|untouched|unmodified|intact)\b`, "gi"),
+  new RegExp(String.raw`${CLAUSE_START}${REPEAT_PATH_START}${UNTOUCHED_TEST_DIR}\s+(?:is|was|remains|remained|stayed|has\s+been)\s+(?:left\s+)?(?:unchanged|untouched|unmodified|intact)\b`, "gi"),
   // "Leaving the tests as they were", "keeping the repository tests intact", "keeping all test files read-only".
   new RegExp(String.raw`\b(?:left|leaving|kept|keeping)\s+(?:the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:(?:existing|original|repository|repo|provided|given)\s+)?(?:test\s+files?|test\s+code|test\s+suite|tests?)\s+(?:(?:exactly\s+)?as\s+(?:they|it)\s+(?:were|was|are|is)\b|intact\b|read[- ]only\b|unmodified\b|unchanged\b|untouched\b)`, "gi"),
   // "While preserving all the original tests".
@@ -136,7 +142,7 @@ const UNTOUCHED_IMPLIED_PATTERNS = [
 const DISCLOSES_TEST_EDIT = /\b(?:updated|changed|modified|edited|adjusted|rewrote|commented\s+out|skipped|deleted|removed)\s+(?:the\s+|a\s+|one\s+|two\s+|both\s+)?(?:[\w-]+\s+)?(?:tests?|test\s+files?|specs?)\b|\b(?:tests?|test\s+files?)\s+(?:was|were)\s+(?:updated|changed|modified|edited|adjusted)\b/i;
 // Not a claim about this reply's work: inability, a plan, a condition, or the user's request.
 const UNTOUCHED_NOT_A_CLAIM = /\b(?:can['’]?t|cannot|could\s?n['’]?t|could\s+not|unable|impossible|no\s+way|not\s+possible|would|need(?:s|ed)?\s+to|requires?|required|must|should|have\s+to|has\s+to|will|['’]ll|won['’]t|let\s+me|going\s+to|plan(?:s|ned)?|try|tried|trying|attempt\w*|if|unless|whether|how\s+to|asked|told|instructed|request(?:s|ed)?\s+(?:me|that))\b/i;
-const UNTOUCHED_SCOPE_AFTER = /^\s*(?:(?:in|under|inside|for|of|from)\s+(?!(?:this|the)\s+(?:repo|repository|project|codebase|change|pr|pull\s+request|commit|branch|process|fix|task)\b)|,?\s*(?:except|other\s+than|apart\s+from|aside\s+from|besides|beyond|but\s+(?:for|only))\b)/i;
+const UNTOUCHED_SCOPE_AFTER = /^\s*(?:(?:in|under|inside|for|of|from)\s+(?!(?:this|the)\s+(?:repo|repository|project|codebase|change|pr|pull\s+request|commit|branch|process|fix|task)\b)|(?:,\s*)?(?:except|other\s+than|apart\s+from|aside\s+from|besides|beyond|but\s+(?:for|only))\b)/i;
 const NEGATION_WINDOW = 28;
 const NEGATION_LIST_WINDOW = 80;
 const CLAUSE_BREAK = /[.!?;:](?=\s)|\n|,\s+(?:and|but|so)\s/g;

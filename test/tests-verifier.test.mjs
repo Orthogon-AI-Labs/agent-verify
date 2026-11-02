@@ -25,6 +25,16 @@ test("test verifier fails on non-zero test command", async () => {
   assert.match(result.summary, /exited 1/);
 });
 
+test("a test command that runs past the time limit is inconclusive, not a failure", async () => {
+  const cwd = tempDir();
+  fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({
+    test: { command: `${JSON.stringify(process.execPath)} -e "setTimeout(() => {}, 10000)"`, timeoutMs: 300 }
+  }));
+  const result = await verifyTestsClaim({ cwd, config: loadConfig(cwd) });
+  assert.equal(result.status, "inconclusive");
+  assert.match(result.summary, /did not finish within 300ms/);
+});
+
 test("test verifier passes on zero test command", async () => {
   const cwd = tempDir();
   fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({

@@ -43,14 +43,24 @@ export async function verifyTestsClaim({ cwd, config }) {
       exitCode: result.exitCode
     };
   }
-  const reason = result.timedOut
-    ? `timed out after ${testCommand.timeoutMs}ms`
-    : `exited ${result.exitCode}`;
+  // A run cut off by the time limit never finished, so it says nothing about whether the tests pass.
+  if (result.timedOut) {
+    return {
+      verifier: "tests",
+      status: "inconclusive",
+      summary: `Claimed tests passed, but \`${testCommand.command}\` did not finish within ${testCommand.timeoutMs}ms, so Verify could not check it.`,
+      details: combinedOutput,
+      command: testCommand.command,
+      exitCode: result.exitCode,
+      durationMs: result.durationMs,
+      timedOut: true
+    };
+  }
 
   return {
     verifier: "tests",
     status: "fail",
-    summary: `Claimed tests passed, but \`${testCommand.command}\` ${reason}.`,
+    summary: `Claimed tests passed, but \`${testCommand.command}\` exited ${result.exitCode}.`,
     details: combinedOutput,
     command: testCommand.command,
     exitCode: result.exitCode,

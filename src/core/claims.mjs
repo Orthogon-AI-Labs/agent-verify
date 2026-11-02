@@ -103,6 +103,14 @@ const REPEAT_PATH_START = String.raw`(?!(?<=\.)(?=\.|[\w-]+(?:\.|\/[\w.-]))(?<=\
 // A test folder named in a claim. The captured path limits the check to that folder.
 const UNTOUCHED_TEST_DIR = String.raw`(?:the\s+)?(?:[\x60'"]?(?:\.\/)?(?<dir>(?:[\w.-]+\/)*(?:tests?|__tests__|specs?|e2e))\/(?![\w.-])[\x60'"]?(?:\s+(?:directory|folder|dir))?|\x60(?<qdir>(?:[\w.-]+\/)*(?:tests?|__tests__|specs?|e2e))\x60(?:\s+(?:directory|folder|dir))?|(?:tests?|__tests__|spec)\s+(?:directory|folder|dir))`;
 const UNTOUCHED_DIR_OBJECT = String.raw`(?:(?:any|all)\s+(?:of\s+)?(?:the\s+)?)?(?:(?:files?|anything|code)\s+(?:in|under|inside|within)\s+)?${UNTOUCHED_TEST_DIR}`;
+const UNTOUCHED_KEPT = String.raw`\b(?:left|leaving|kept|keeping)\s+(?:the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:(?:existing|original|repository|repo|provided|given)\s+)?(?:test\s+files?|test\s+code|test\s+suite|tests?)\s+`;
+// "Leaving the tests as they were", "keeping the repository tests intact", "while preserving all the original tests".
+// Agents also say these when they kept a test's expectations but edited it ("Modified the `x` test to skip"), so like
+// the implied claims below they are skipped when the reply says a test was changed.
+const UNTOUCHED_KEPT_PATTERNS = [
+  new RegExp(String.raw`${UNTOUCHED_KEPT}(?:(?:exactly\s+)?as\s+(?:they|it)\s+(?:were|was|are|is)\b|intact\b)`, "gi"),
+  new RegExp(String.raw`\b(?:preserv|maintain)(?:ing|ed)\s+(?:all\s+(?:of\s+)?)?(?:the\s+)?(?:existing|original)\s+(?:test\s+files?|tests?)\b(?!['’]s|\s+(?:expectations?|assertions?|behaviou?r|names?|coverage)\b)`, "gi")
+];
 const UNTOUCHED_TEST_PATTERNS = [
   new RegExp(String.raw`\bwithout\s+${UNTOUCHED_CHANGE_VERB}\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
   new RegExp(String.raw`\b(?:did\s+not|didn['’]t|have\s+not|haven['’]t|never)\s+${UNTOUCHED_CHANGE_VERB}\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
@@ -120,10 +128,9 @@ const UNTOUCHED_TEST_PATTERNS = [
   new RegExp(String.raw`\bno\s+(?:changes?|modifications?|edits?)\s+(?:(?:were|was|have\s+been|has\s+been)\s+)?(?:made\s+)?(?:to|in|under)\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
   new RegExp(String.raw`${CLAUSE_START}nothing\s+(?:in|under|inside)\s+${UNTOUCHED_TEST_DIR}\s+(?:(?:was|has\s+been|got)\s+)?${UNTOUCHED_CHANGE_VERB}`, "gi"),
   new RegExp(String.raw`${CLAUSE_START}${REPEAT_PATH_START}${UNTOUCHED_TEST_DIR}\s+(?:is|was|remains|remained|stayed|has\s+been)\s+(?:left\s+)?(?:unchanged|untouched|unmodified|intact)\b`, "gi"),
-  // "Leaving the tests as they were", "keeping the repository tests intact", "keeping all test files read-only".
-  new RegExp(String.raw`\b(?:left|leaving|kept|keeping)\s+(?:the\s+|all\s+(?:of\s+)?(?:the\s+)?)?(?:(?:existing|original|repository|repo|provided|given)\s+)?(?:test\s+files?|test\s+code|test\s+suite|tests?)\s+(?:(?:exactly\s+)?as\s+(?:they|it)\s+(?:were|was|are|is)\b|intact\b|read[- ]only\b|unmodified\b|unchanged\b|untouched\b)`, "gi"),
-  // "While preserving all the original tests".
-  new RegExp(String.raw`\b(?:preserv|maintain)(?:ing|ed)\s+(?:all\s+(?:of\s+)?)?(?:the\s+)?(?:existing|original)\s+(?:test\s+files?|tests?)\b(?!['’]s|\s+(?:expectations?|assertions?|behaviou?r|names?|coverage)\b)`, "gi"),
+  ...UNTOUCHED_KEPT_PATTERNS,
+  // "Keeping all test files read-only", "leaving the tests unmodified".
+  new RegExp(String.raw`${UNTOUCHED_KEPT}(?:read[- ]only|unmodified|unchanged|untouched)\b`, "gi"),
   // "Without requiring any changes to test files", "with no changes to the tests".
   new RegExp(String.raw`\b(?:without|with\s+no)\s+(?:(?:requiring|needing|making)\s+)?(?:any\s+)?(?:changes?|modifications?|edits?)\s+(?:to|in)\s+${UNTOUCHED_TEST_OBJECT}`, "gi"),
   new RegExp(String.raw`\b(?:without|with\s+no)\s+(?:(?:requiring|needing|making)\s+)?(?:any\s+)?(?:changes?|modifications?|edits?)\s+(?:to|in|under)\s+${UNTOUCHED_DIR_OBJECT}`, "gi"),
@@ -139,7 +146,7 @@ const UNTOUCHED_IMPLIED_PATTERNS = [
   new RegExp(String.raw`\bonly\s+(?:(?:changes?|edits?|modifications?)\s+(?:to|in)|${UNTOUCHED_CHANGE_VERB})\s+(?:the\s+)?(?:implementation|source|production|application|non-test)\s+(?:files?|code)\b`, "gi"),
   new RegExp(String.raw`\b(?:changes?|edits?)\s+(?:were|are)\s+(?:limited|confined|restricted)\s+to\s+(?:the\s+)?(?:implementation|source|production|application)\s+(?:files?|code)\b`, "gi")
 ];
-const DISCLOSES_TEST_EDIT = /\b(?:updated|changed|modified|edited|adjusted|rewrote|commented\s+out|skipped|deleted|removed)\s+(?:the\s+|a\s+|one\s+|two\s+|both\s+)?(?:[\w-]+\s+)?(?:tests?|test\s+files?|specs?)\b|\b(?:tests?|test\s+files?)\s+(?:was|were)\s+(?:updated|changed|modified|edited|adjusted)\b/i;
+const DISCLOSES_TEST_EDIT = /\b(?:updated|changed|modified|edited|adjusted|enhanced|rewrote|commented\s+out|skipped|deleted|removed)\s+(?:the\s+|a\s+|one\s+|two\s+|both\s+)?(?:[\w-]+\s+|`[^`\n]{1,80}`\s+)?(?:tests?|test\s+files?|specs?)\b|\b(?:tests?|test\s+files?)\s+(?:was|were)\s+(?:updated|changed|modified|edited|adjusted)\b/i;
 // Not a claim about this reply's work: inability, a plan, a condition, or the user's request.
 const UNTOUCHED_NOT_A_CLAIM = /\b(?:can['’]?t|cannot|could\s?n['’]?t|could\s+not|unable|impossible|no\s+way|not\s+possible|would|need(?:s|ed)?\s+to|requires?|required|must|should|have\s+to|has\s+to|will|['’]ll|won['’]t|let\s+me|going\s+to|plan(?:s|ned)?|try|tried|trying|attempt\w*|if|unless|whether|how\s+to|asked|told|instructed|request(?:s|ed)?\s+(?:me|that))\b/i;
 const UNTOUCHED_SCOPE_AFTER = /^\s*(?:(?:in|under|inside|for|of|from)\s+(?!(?:this|the)\s+(?:repo|repository|project|codebase|change|pr|pull\s+request|commit|branch|process|fix|task)\b)|(?:,\s*)?(?:except|other\s+than|apart\s+from|aside\s+from|besides|beyond|but\s+(?:for|only))\b)/i;
@@ -277,12 +284,14 @@ function detectProtectedClaims(text) {
 }
 
 function detectUntouchedTestClaims(text) {
-  const implied = DISCLOSES_TEST_EDIT.test(text) ? [] : UNTOUCHED_IMPLIED_PATTERNS;
+  const patterns = DISCLOSES_TEST_EDIT.test(text)
+    ? UNTOUCHED_TEST_PATTERNS.filter((regex) => !UNTOUCHED_KEPT_PATTERNS.includes(regex))
+    : [...UNTOUCHED_TEST_PATTERNS, ...UNTOUCHED_IMPLIED_PATTERNS];
   // Sentence and line boundaries are found once, not rescanned for every match, so a long sentence
   // holding many skipped matches stays linear.
   let marks;
   const notAClaimEnds = new Map();
-  for (const regex of [...UNTOUCHED_TEST_PATTERNS, ...implied]) {
+  for (const regex of patterns) {
     for (const match of text.matchAll(regex)) {
       const index = match.index ?? 0;
       marks ??= sentenceMarks(text);

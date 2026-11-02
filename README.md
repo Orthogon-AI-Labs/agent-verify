@@ -57,6 +57,7 @@ agent-verify blocks a reply at most once and never edits your code. It has no te
 - It checks the project as it is when the reply ends. It can't tell which earlier test run or push the agent was talking about.
 - It only reads the agent's final message.
 - It recognizes test files by common names and folders (`test/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`, `test_*.py`, `*_test.go` and similar). It counts changes since the first tool call of the session, so in a long session a test you asked the agent to change earlier also counts.
+- "Leaving the tests as they were", "keeping the tests intact" and "preserving the original tests" aren't checked when the same reply says it changed a test ("modified the `x` test to skip"), since agents use them to mean the test's expectations were kept. "No test files were modified" and "the tests are unchanged" are always checked.
 
 ## Receipt
 

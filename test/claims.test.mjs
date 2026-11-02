@@ -127,3 +127,23 @@ test("counts quoted text as a file only when it looks like a file path", () => {
   ]);
   assert.deepEqual(files("I created `apps/desk/src/app/c/[token]/page.tsx`."), ["apps/desk/src/app/c/[token]/page.tsx"]);
 });
+
+test("stays fast on long runs of spaces, dots and paths, and on many skipped claims in one sentence", () => {
+  const inputs = [
+    " ".repeat(50000),
+    "without requiring " + " ".repeat(50000) + "x",
+    "\n".repeat(50000),
+    ".".repeat(50000),
+    "a.b/".repeat(12500),
+    "The test files are unchanged" + " ".repeat(50000),
+    "If " + "the tests are unchanged, and ".repeat(4000),
+    "\"" + "without changing any tests, ".repeat(4000),
+    "the tests are unchanged and ".repeat(4000) + "?"
+  ];
+  for (const input of inputs) {
+    const started = performance.now();
+    detectClaims(input);
+    const ms = performance.now() - started;
+    assert.ok(ms < 100, `${JSON.stringify(input.slice(0, 24))}... (${input.length} chars) took ${Math.round(ms)} ms`);
+  }
+});

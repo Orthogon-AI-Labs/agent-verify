@@ -108,7 +108,8 @@ async function verifyOpenedPr(cwd) {
   }
 
   const branchName = branch.stdout.trim();
-  const result = await runBinary("gh", ["pr", "view", "--head", branchName, "--json", "url,state,title"], {
+  // `gh pr view` takes the branch as its argument; it has no --head flag.
+  const result = await runBinary("gh", ["pr", "view", branchName, "--json", "url,state,title"], {
     cwd,
     timeoutMs: GIT_TIMEOUT_MS
   });
@@ -125,15 +126,25 @@ async function verifyOpenedPr(cwd) {
     return {
       verifier: "git",
       status: "pass",
-      summary: `Claimed a PR was opened, and \`gh pr view --head ${branchName}\` succeeded.`,
+      summary: `Claimed a PR was opened, and \`gh pr view ${branchName}\` found it.`,
       details: result.stdout.trim()
+    };
+  }
+
+  // Only "no pull requests found" shows there is no PR; a sign-in, network or repo error says nothing either way.
+  if (!/no pull requests found/i.test(result.stderr)) {
+    return {
+      verifier: "git",
+      status: "inconclusive",
+      summary: `Claimed a PR was opened, but \`gh pr view ${branchName}\` failed, so Verify could not look it up.`,
+      details: result.stderr.trim()
     };
   }
 
   return {
     verifier: "git",
     status: "fail",
-    summary: `Claimed a PR was opened, but \`gh pr view --head ${branchName}\` failed.`,
+    summary: `Claimed a PR was opened, but \`gh pr view ${branchName}\` found no PR for this branch.`,
     details: result.stderr.trim()
   };
 }

@@ -81,6 +81,44 @@ esac
   }
 });
 
+test("a push claim passes when the same-name remote branch has HEAD, even without a matching upstream", async (t) => {
+  const git = await runBinary("git", ["--version"]);
+  if (git.exitCode !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const remote = tempDir();
+  const cwd = tempDir();
+  const run = (args) => runBinary("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args], { cwd });
+  const pushed = async () =>
+    (await verifyGitClaim({ cwd, evidence: emptyEvidence("test", cwd), claim: { action: "pushed", text: "pushed" } })).status;
+  await runBinary("git", ["init", "-q", "--bare", remote]);
+  await run(["init", "-q", "-b", "main"]);
+  await run(["remote", "add", "origin", remote]);
+  await run(["commit", "-q", "--allow-empty", "-m", "init"]);
+  await run(["push", "-q", "-u", "origin", "main"]);
+
+  // Pushed with `git push origin <branch>`, no -u: no upstream.
+  await run(["switch", "-q", "-c", "no-upstream"]);
+  await run(["commit", "-q", "--allow-empty", "-m", "a"]);
+  assert.equal(await pushed(), "fail");
+  await run(["push", "-q", "origin", "no-upstream"]);
+  assert.equal(await pushed(), "pass");
+
+  // Branched from origin/main, so it tracks main and is 2 ahead of it, but origin/<branch> has both commits.
+  await run(["switch", "-q", "-c", "tracks-main", "--track", "origin/main"]);
+  await run(["commit", "-q", "--allow-empty", "-m", "b"]);
+  await run(["commit", "-q", "--allow-empty", "-m", "c"]);
+  assert.equal(await pushed(), "fail");
+  await run(["push", "-q", "origin", "tracks-main"]);
+  assert.equal(await pushed(), "pass");
+
+  // A commit made after the push is still unpushed.
+  await run(["commit", "-q", "--allow-empty", "-m", "d"]);
+  assert.equal(await pushed(), "fail");
+});
+
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-git-"));
 }

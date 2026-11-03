@@ -63,7 +63,7 @@ async function verifyCommitted(cwd, evidence) {
 async function verifyPushed(cwd) {
   const upstream = await git(cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
   if (upstream.exitCode !== 0) {
-    return {
+    return await sameNameRemoteHasHead(cwd) ?? {
       verifier: "git",
       status: "fail",
       summary: "Claimed the branch was pushed, but the current branch has no upstream."
@@ -89,12 +89,36 @@ async function verifyPushed(cwd) {
     };
   }
 
-  return {
+  return await sameNameRemoteHasHead(cwd) ?? {
     verifier: "git",
     status: "fail",
     summary: `Claimed the branch was pushed, but local HEAD is ${ahead} commit(s) ahead of upstream.`,
     details: Number.isFinite(behind) && behind > 0 ? `The branch is also ${behind} commit(s) behind upstream.` : ""
   };
+}
+
+// `git push <remote> <branch>` without -u sets no upstream, and a branch made from origin/main tracks origin/main, but
+// either push still moves <remote>/<branch>. A pass when HEAD isn't ahead of one of those; null otherwise.
+async function sameNameRemoteHasHead(cwd) {
+  const branch = await git(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]);
+  const remotes = await git(cwd, ["remote"]);
+  if (branch.exitCode !== 0 || remotes.exitCode !== 0) {
+    return null;
+  }
+
+  const branchName = branch.stdout.trim();
+  for (const remote of remotes.stdout.split("\n").map((name) => name.trim()).filter(Boolean)) {
+    const ref = `refs/remotes/${remote}/${branchName}`;
+    const ahead = await git(cwd, ["rev-list", "--count", `${ref}..HEAD`, "--"]);
+    if (ahead.exitCode === 0 && ahead.stdout.trim() === "0") {
+      return {
+        verifier: "git",
+        status: "pass",
+        summary: `Claimed the branch was pushed, and local HEAD is not ahead of \`${remote}/${branchName}\`.`
+      };
+    }
+  }
+  return null;
 }
 
 async function verifyOpenedPr(cwd) {

@@ -3,6 +3,7 @@ import { readStdinJson, writeJson } from "../../core/io.mjs";
 import { formatBlockReason } from "../../core/format.mjs";
 import { verifyFinalMessage } from "../../core/verify.mjs";
 import { writeReceipt } from "../../core/receipt.mjs";
+import { recordStop } from "../../core/evidence.mjs";
 
 try {
   const input = await readStdinJson();
@@ -11,6 +12,12 @@ try {
   }
 
   const verification = await verifyFinalMessage(input);
+
+  try {
+    recordStop(verification.sessionId, verification.cwd);
+  } catch (error) {
+    console.error(`[agent-verify] could not record the end of this turn: ${error.message}`);
+  }
 
   try {
     await writeReceipt(verification, { cwd: verification.cwd, config: verification.config });

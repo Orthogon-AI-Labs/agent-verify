@@ -102,6 +102,17 @@ test("ignores push mentions that say nothing was pushed", () => {
   assert.equal(pushed("Both are fixed and pushed; nothing is merged."), true);
 });
 
+test("ignores git claims inside double quotes", () => {
+  const git = (text) => detectClaims(text).filter((claim) => claim.type === "git").map((claim) => claim.action);
+
+  // A real wrong block: the reply quoted a test sentence; the agent opened no PR.
+  assert.deepEqual(git("On 1.5.2, the claim \"I opened a pull request for this branch.\" was wrongly blocked."), []);
+  assert.deepEqual(git("The prompt ends with “I committed the fix and pushed the branch.”"), []);
+  assert.deepEqual(git("I committed \"Fix login\" and pushed the branch."), ["pushed"]);
+  assert.deepEqual(git("Opened a PR titled \"Retry on timeout\"."), ["opened-pr"]);
+  assert.deepEqual(git("He said \"done\".\nI pushed the branch."), ["pushed"]);
+});
+
 test("a negation in an earlier sentence or clause doesn't cancel a claim", () => {
   const has = (text, type) => detectClaims(text).some((claim) => claim.type === type);
 

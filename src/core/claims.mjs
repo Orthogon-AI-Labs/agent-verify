@@ -244,11 +244,17 @@ function looksLikeFilePath(value) {
 
 function detectGitClaims(text) {
   const claims = [];
+  let marks;
 
   for (const pattern of GIT_PATTERNS) {
     for (const match of text.matchAll(pattern.regex)) {
       const end = (match.index ?? 0) + match[0].length;
       if (hasNearbyNegation(text, match.index ?? 0) || NOTHING_AFTER.test(text.slice(end, end + 40))) {
+        continue;
+      }
+      // A quoted sentence (the claim "I opened a pull request" was blocked) is about a claim, not one.
+      marks ??= sentenceMarks(text);
+      if (inQuotes(marks, match.index ?? 0)) {
         continue;
       }
 
@@ -298,7 +304,6 @@ function detectUntouchedTestClaims(text) {
       // The last "\n", ". ", "! " or "? " at or before the match, and the first sentence end at or after it.
       const sentenceStart = (marks.breaks[lowerBound(marks.breaks, index + 1) - 1] ?? -1) + 1;
       const sentenceEnd = marks.ends[lowerBound(marks.ends, index)];
-      const lineStart = (marks.newlines[lowerBound(marks.newlines, index + 1) - 1] ?? -1) + 1;
       const after = text.slice(index + match[0].length);
       if (UNTOUCHED_SCOPE_AFTER.test(after)) {
         continue;
@@ -307,7 +312,7 @@ function detectUntouchedTestClaims(text) {
         continue;
       }
       // Quoted speech ("then said \"without changing any test files\"") reports someone else's claim.
-      if (lineStart < index && (lowerBound(marks.quotes, index) - lowerBound(marks.quotes, lineStart)) % 2 === 1) {
+      if (inQuotes(marks, index)) {
         continue;
       }
       if (notAClaimBefore(text, sentenceStart, index, notAClaimEnds)) {
@@ -328,6 +333,12 @@ function sentenceMarks(text) {
     ends: positions(/[.!?](?=\s|$)|\n/g),
     quotes: positions(/["“”]/g)
   };
+}
+
+// An odd number of double quotes between the start of the line and the match.
+function inQuotes(marks, index) {
+  const lineStart = (marks.newlines[lowerBound(marks.newlines, index + 1) - 1] ?? -1) + 1;
+  return lineStart < index && (lowerBound(marks.quotes, index) - lowerBound(marks.quotes, lineStart)) % 2 === 1;
 }
 
 // Index of the first sorted position that is >= value.

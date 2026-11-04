@@ -25,7 +25,9 @@ test("finds a turn whose work was all in other checkouts", { skip: process.platf
 
   const { cwd, other, worktree } = await checkouts();
   const scratch = tempDir();
-  const turn = (items, extra = {}) => ({ ...emptyEvidence("test", cwd), ...extra, ...items });
+  // The session starts before its edits; items are built before turn() runs, so set it in the past.
+  const startedAt = new Date(Date.now() - 120000).toISOString();
+  const turn = (items, extra = {}) => ({ ...emptyEvidence("test", cwd), startedAt, ...extra, ...items });
   const edit = (file, at = new Date().toISOString()) => ({ path: file, normalizedPath: file, at });
   const bash = (command, at = new Date().toISOString()) => ({ command, at });
   const roots = async (evidence) => (await workElsewhere(cwd, evidence))?.roots;
@@ -61,7 +63,7 @@ test("test and git claims are inconclusive when the turn's work was in another c
   const message = "All tests pass, and I pushed the branch.";
   const verify = (file) => verifyFinalMessage(
     { cwd, session_id: "test", last_assistant_message: message },
-    { evidence: { ...emptyEvidence("test", cwd), touchedFiles: [{ path: file, normalizedPath: file, at: new Date().toISOString() }] } }
+    { evidence: { ...emptyEvidence("test", cwd), startedAt: new Date(Date.now() - 120000).toISOString(), touchedFiles: [{ path: file, normalizedPath: file, at: new Date().toISOString() }] } }
   );
 
   const elsewhere = await verify(path.join(other, "a.js"));

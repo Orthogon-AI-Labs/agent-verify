@@ -65,7 +65,10 @@ export function recordPostToolUse(input, dataRoot = getPluginDataRoot()) {
   for (const filePath of extractTouchedFiles(input)) {
     const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath);
     const normalized = normalizePathForCompare(absolutePath);
-    if (!evidence.touchedFiles.some((entry) => entry.normalizedPath === normalized)) {
+    const known = evidence.touchedFiles.find((entry) => entry.normalizedPath === normalized);
+    if (known) {
+      known.lastAt = at;
+    } else {
       evidence.touchedFiles.push({
         path: absolutePath,
         normalizedPath: normalized,
@@ -77,6 +80,13 @@ export function recordPostToolUse(input, dataRoot = getPluginDataRoot()) {
 
   saveSessionEvidence(dataRoot, evidence);
   return evidence;
+}
+
+// The next turn's work is what the session records after this Stop.
+export function recordStop(sessionId, cwd, dataRoot = getPluginDataRoot()) {
+  const evidence = loadSessionEvidence(dataRoot, sessionId, cwd);
+  evidence.lastStopAt = new Date().toISOString();
+  saveSessionEvidence(dataRoot, evidence);
 }
 
 export function hasTouchedFile(evidence, absolutePath) {

@@ -192,6 +192,9 @@ function detectTestClaims(text) {
       if (TABLE_CELL_AFTER.test(text.slice(end)) || CONDITION_BEFORE.test(text.slice(Math.max(0, (match.index ?? 0) - 40), match.index))) {
         continue;
       }
+      if ((!/^all\b/i.test(match[0]) && namesSubset(text.slice(Math.max(0, (match.index ?? 0) - 80), match.index))) || SUBSET_RUN_AFTER.test(text.slice(end))) {
+        continue;
+      }
 
       claims.push({
         type: "tests",
@@ -201,6 +204,50 @@ function detectTestClaims(text) {
   }
 
   return claims.length > 0 ? [claims[0]] : [];
+}
+
+// "The Matrix and page-data tests pass (12 of 12)", "all 24 CI-file tests pass", "2034 of 2034 desk tests pass": a
+// named part of the suite, which the repo's whole test command can't check. "All 2,115 tests", "the full", "every",
+// "its" or "relevant tests" still claim the suite passes.
+const SUITE_WORD = new RegExp(`^(?:${[
+  // Determiners and whole-suite words
+  "a|an|the|all|every|each|both|any|my|our|your|his|her|its|their|these|those|this|that|which",
+  "full|entire|whole|complete|existing|new|old|unit|integration|e2e|end-to-end|automatic|automated|software|local|locally",
+  // Vague scopes: false claims hide behind these ("Relevant tests pass" right after a failing run)
+  "relevant|related|affected|targeted|focused|remaining|other|same|original|current|added|updated|fixed|failing|previously",
+  // Test runners
+  "npm|pnpm|yarn|bun|deno|python|node|jest|vitest|pytest|mocha|playwright|cargo|go",
+  // Words that end the phrase: "verified that tests pass", "reports 171 tests passing"
+  "now|still|also|then|so|or|but|plus|with|without|make|makes|made|making|see|saw|verified|confirmed|ensured|checked",
+  "run|ran|rerun|reran|re-ran|re-run|got|get|gets|having|have|has|had|reports?|shows?|gives|says|runs|lists|prints|returns",
+  "ensuring|confirming|verifying|checking|running|keeping|seeing"
+].join("|")})$`, "i");
+const SUBSET_NAME = /^[\p{L}][\p{L}\p{N}_./:-]*$/u;
+const COUNT_WORD = /^\(?\d[\d,]*\+?(?:\/\d[\d,]*)?\)?$|^of$|^(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\w+teen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-\w+)?$/i;
+const SUBSET_RUN_AFTER = /^\s+(?:on\s+(?:their|its)\s+own|individually|in\s+isolation|by\s+(?:themselves|itself))\b/i;
+
+// The words right before "tests" name part of the suite.
+function namesSubset(before) {
+  const words = before.split(/[.!?;:\n([]/).pop().replace(/,/g, " , ").trim().split(/\s+/).filter(Boolean);
+  let names = 0;
+  for (let i = words.length - 1; i >= 0; i--) {
+    const word = words[i].replace(/^[`'"*]+|[`'"*]+$/g, "");
+    if (COUNT_WORD.test(word)) {
+      continue;
+    }
+    // "Matrix and page-data tests" names two parts; "typecheck and tests pass" names none.
+    if (/^(?:and|&|,)$/.test(word)) {
+      if (names > 0) {
+        continue;
+      }
+      break;
+    }
+    if (!word || SUITE_WORD.test(word) || !SUBSET_NAME.test(word)) {
+      break;
+    }
+    names++;
+  }
+  return names > 0;
 }
 
 function detectFileClaims(text) {

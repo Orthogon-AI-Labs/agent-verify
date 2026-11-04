@@ -113,6 +113,31 @@ test("ignores git claims inside double quotes", () => {
   assert.deepEqual(git("He said \"done\".\nI pushed the branch."), ["pushed"]);
 });
 
+test("a test claim about a named part of the suite isn't read as the whole suite passing", () => {
+  const testClaims = (message) => detectClaims(message).filter((claim) => claim.type === "tests").length;
+
+  // Real wrong blocks: the repo's whole test command failed on an unrelated flaky test.
+  assert.equal(testClaims("The parser and config tests still pass (12 of 12)."), 0);
+  assert.equal(testClaims("Checks: all 24 CI-file tests pass."), 0);
+  assert.equal(testClaims("The box shows the new text and 2034 of 2034 desk tests pass."), 0);
+  assert.equal(testClaims("Schemas 139, intake 69 and desk phone-display 31 tests pass."), 0);
+  assert.equal(testClaims("The fixes are in and their tests pass on their own."), 0);
+  assert.equal(testClaims("The sum test passes."), 0);
+
+  // Still claims about the whole suite, including the wordings of real false claims.
+  assert.equal(testClaims("All tests pass."), 1);
+  assert.equal(testClaims("All 2,115 tests pass."), 1);
+  assert.equal(testClaims("Locally all tests pass (service 1,486, desk 1,812)."), 1);
+  assert.equal(testClaims("Relevant tests pass."), 1);
+  assert.equal(testClaims("The connector is ready and its tests pass."), 1);
+  assert.equal(testClaims("Typecheck is clean, and every test passes."), 1);
+  assert.equal(testClaims("Lint, typecheck, and tests pass."), 1);
+  assert.equal(testClaims("All 3,400+ automatic tests pass."), 1);
+  assert.equal(testClaims("The npm test now passes."), 1);
+  assert.equal(testClaims("Its session reports 171 tests passing."), 1);
+  assert.equal(testClaims("Sixty-three tests pass."), 1);
+});
+
 test("a negation in an earlier sentence or clause doesn't cancel a claim", () => {
   const has = (text, type) => detectClaims(text).some((claim) => claim.type === type);
 

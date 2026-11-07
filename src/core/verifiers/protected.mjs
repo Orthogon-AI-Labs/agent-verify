@@ -33,7 +33,8 @@ export async function verifyProtectedClaim({ cwd, claim, config }) {
 
   const args = [checker];
   for (const name of config.protected.allowed) {
-    args.push("--allow", name);
+    // --allow=NAME: with "--allow NAME", a name starting with "-" is read as an option.
+    args.push(`--allow=${name}`);
   }
 
   const result = await runBinary("python3", args, {
@@ -61,39 +62,34 @@ export async function verifyProtectedClaim({ cwd, claim, config }) {
     };
   }
 
-  if (hasMarkerSyntaxError(output) || result.exitCode === 2) {
-    return {
-      verifier: "protected",
-      status: "inconclusive",
-      summary: summarizeSyntaxError(output),
-      details: output
-    };
-  }
-
   if (result.exitCode === 1) {
-    const parsedBlocks = parseModifiedBlocks(output);
-    if (parsedBlocks.length === 0) {
-      // A crash (an uncaught Python exception) also exits 1, with a traceback and no
-      // failure lines. That is not an observed modification, so it must not block.
-      if (!hasFailureLines(result.stdout)) {
-        return {
-          verifier: "protected",
-          status: "inconclusive",
-          summary: "Claimed protected sections were intact, but the protected-section checker failed without reporting any blocks, so Verify could not check them.",
-          details: output
-        };
-      }
-
+    // Changed blocks first: a marker syntax error in one file must not hide a changed block in another.
+    const parsedBlocks = parseModifiedBlocks(result.stdout);
+    const syntaxErrors = markerSyntaxErrors(result.stdout);
+    const blocks = filterSkippedBlocks(parsedBlocks, config.protected.skipPaths);
+    if (blocks.length > 0) {
       return {
         verifier: "protected",
         status: "fail",
-        summary: "Claimed protected sections were intact, but the checker reported protected-section failures.",
+        summary: `Claimed protected sections were intact, but ${blocks.length} block(s) were modified:`,
+        blocks,
+        details: [
+          ...blocks.map((block) => `${block.path} (block: ${block.name})`),
+          ...syntaxErrors
+        ].join("\n")
+      };
+    }
+
+    if (syntaxErrors.length > 0) {
+      return {
+        verifier: "protected",
+        status: "inconclusive",
+        summary: `Claimed protected sections were intact, but ${syntaxErrors[0]}`,
         details: output
       };
     }
 
-    const blocks = filterSkippedBlocks(parsedBlocks, config.protected.skipPaths);
-    if (blocks.length === 0) {
+    if (parsedBlocks.length > 0) {
       return {
         verifier: "protected",
         status: "pass",
@@ -101,12 +97,22 @@ export async function verifyProtectedClaim({ cwd, claim, config }) {
       };
     }
 
+    // A crash (an uncaught Python exception) also exits 1, with a traceback and no
+    // failure lines. That is not an observed modification, so it must not block.
+    if (!hasFailureLines(result.stdout)) {
+      return {
+        verifier: "protected",
+        status: "inconclusive",
+        summary: "Claimed protected sections were intact, but the protected-section checker failed without reporting any blocks, so Verify could not check them.",
+        details: output
+      };
+    }
+
     return {
       verifier: "protected",
       status: "fail",
-      summary: `Claimed protected sections were intact, but ${blocks.length} block(s) were modified:`,
-      blocks,
-      details: blocks.map((block) => `${block.path} (block: ${block.name})`).join("\n")
+      summary: "Claimed protected sections were intact, but the checker reported protected-section failures.",
+      details: output
     };
   }
 
@@ -126,13 +132,10 @@ function findChecker(repoRoot, protectedConfig) {
     return fs.existsSync(explicitPath) ? explicitPath : null;
   }
 
-  const candidates = [
-    path.join(repoRoot, ".canon", "codex", "bin", "check-protected-sections.py"),
-    path.join(repoRoot, ".canon", "bin", "check-protected-sections.py"),
-    path.join(VERIFY_ROOT, "vendor", "check-protected-sections.py")
-  ];
-
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+  // Only the vendored copy otherwise: a checker found inside the repository under verification
+  // could be stale, or written to pass.
+  const vendored = path.join(VERIFY_ROOT, "vendor", "check-protected-sections.py");
+  return fs.existsSync(vendored) ? vendored : null;
 }
 
 function parseModifiedBlocks(output) {
@@ -167,20 +170,13 @@ function filterSkippedBlocks(blocks, skipPaths) {
   });
 }
 
-function hasMarkerSyntaxError(output) {
-  return /invalid protected marker syntax|missing an end marker|nested protected block|end marker without matching start marker|duplicate protected block/i.test(output);
-}
-
-function summarizeSyntaxError(output) {
-  const line = output
+function markerSyntaxErrors(stdout) {
+  // Only the checker's own syntax-error lines; a block name can contain the same words.
+  const linePattern = /^x\s+(.+?: invalid protected marker syntax in (?:HEAD|working tree|index): .*)$/;
+  return (stdout ?? "")
     .split(/\r?\n/)
-    .find((entry) => /invalid protected marker syntax|missing an end marker|nested protected block|end marker without matching start marker|duplicate protected block/i.test(entry));
-
-  if (!line) {
-    return "Claimed protected sections were intact, but marker syntax could not be checked.";
-  }
-
-  return `Claimed protected sections were intact, but ${line.replace(/^x\s+/, "")}`;
+    .map((line) => line.match(linePattern)?.[1])
+    .filter(Boolean);
 }
 
 function normalizeOutputPath(filePath) {

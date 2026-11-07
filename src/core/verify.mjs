@@ -7,7 +7,7 @@ import { verifyGitClaim } from "./verifiers/git.mjs";
 import { verifyProtectedClaim } from "./verifiers/protected.mjs";
 import { verifySecretsClaim } from "./verifiers/secrets.mjs";
 import { verifyTestFilesClaim } from "./verifiers/unchanged-tests.mjs";
-import { workElsewhere } from "./elsewhere.mjs";
+import { otherBranchPr, pushRoots, workElsewhere } from "./elsewhere.mjs";
 
 const CLAIM_WORDS = {
   tests: "Claimed tests passed",
@@ -28,9 +28,18 @@ export async function verifyFinalMessage(input, options = {}) {
   const elsewhere = claims.some((claim) => claim.type === "tests" || claim.type === "git")
     ? await workElsewhere(cwd, evidence)
     : null;
+  // Claims in the same sentence look its PRs up once.
+  const lookups = new Map();
+  const otherPr = (claim) => {
+    if (!lookups.has(claim.sentence)) {
+      lookups.set(claim.sentence, otherBranchPr(cwd, claim.sentence));
+    }
+    return lookups.get(claim.sentence);
+  };
 
-  if (claims.some((claim) => claim.type === "tests") && isVerifierEnabled(config, "tests")) {
-    results.push(elsewhere ? elsewhereResult("tests", CLAIM_WORDS.tests, elsewhere) : await verifyTestsClaim({ cwd, config, evidence }));
+  const testClaim = claims.find((claim) => claim.type === "tests");
+  if (testClaim && isVerifierEnabled(config, "tests")) {
+    results.push(await checkHere("tests", CLAIM_WORDS.tests, testClaim, elsewhere, otherPr, () => verifyTestsClaim({ cwd, config, evidence })));
   }
 
   if (isVerifierEnabled(config, "files")) {
@@ -40,10 +49,14 @@ export async function verifyFinalMessage(input, options = {}) {
   }
 
   if (isVerifierEnabled(config, "git")) {
+    let roots;
     for (const claim of claims.filter((item) => item.type === "git")) {
-      results.push(elsewhere && CLAIM_WORDS[claim.action]
-        ? elsewhereResult("git", CLAIM_WORDS[claim.action], elsewhere)
-        : await verifyGitClaim({ cwd, claim, evidence }));
+      const check = () => verifyGitClaim({ cwd, claim, evidence });
+      if (claim.action === "pushed" && (roots ??= await pushRoots(cwd, evidence))) {
+        results.push(await pushedAt(roots, claim, evidence));
+        continue;
+      }
+      results.push(CLAIM_WORDS[claim.action] ? await checkHere("git", CLAIM_WORDS[claim.action], claim, elsewhere, otherPr, check) : await check());
     }
   }
 
@@ -73,6 +86,34 @@ export async function verifyFinalMessage(input, options = {}) {
     results,
     shouldBlock: results.some((result) => result.status === "fail")
   };
+}
+
+// A claim is checked at cwd unless the turn's work was all in other checkouts, or its sentence names an open PR on
+// another branch.
+async function checkHere(verifier, claimed, claim, elsewhere, otherPr, check) {
+  if (elsewhere) {
+    return elsewhereResult(verifier, claimed, elsewhere);
+  }
+  const other = await otherPr(claim);
+  return other
+    ? {
+        verifier,
+        status: "inconclusive",
+        summary: `${claimed}, but the claim is about PR #${other.pr} on \`${other.branch}\`, and this folder is on \`${other.cwdBranch}\`, so Verify did not check it here.`
+      }
+    : await check();
+}
+
+// A push claim when this turn pushed only from other checkouts: checked in each, and the worst result kept.
+async function pushedAt(roots, claim, evidence) {
+  const results = [];
+  for (const root of roots) {
+    results.push({ root, ...(await verifyGitClaim({ cwd: root, claim, evidence })) });
+  }
+  const { root, ...worst } = results.find((result) => result.status === "fail")
+    ?? results.find((result) => result.status === "inconclusive")
+    ?? results[0];
+  return { ...worst, summary: `${worst.summary} Checked in \`${root}\`, where this turn ran \`git push\`.` };
 }
 
 function elsewhereResult(verifier, claimed, { cwdRoot, roots }) {

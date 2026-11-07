@@ -177,6 +177,7 @@ function detectTestClaims(text) {
   }
 
   const claims = [];
+  let marks;
   for (const regex of TEST_PATTERNS) {
     for (const match of text.matchAll(regex)) {
       if (hasNearbyNegation(text, match.index ?? 0)) {
@@ -196,9 +197,11 @@ function detectTestClaims(text) {
         continue;
       }
 
+      marks ??= sentenceMarks(text);
       claims.push({
         type: "tests",
-        text: match[0].trim()
+        text: match[0].trim(),
+        sentence: sentenceAround(text, marks, match.index ?? 0)
       });
     }
   }
@@ -308,7 +311,8 @@ function detectGitClaims(text) {
       claims.push({
         type: "git",
         action: pattern.action,
-        text: match[0].trim()
+        text: match[0].trim(),
+        sentence: sentenceAround(text, marks, match.index ?? 0)
       });
     }
   }
@@ -380,6 +384,13 @@ function sentenceMarks(text) {
     ends: positions(/[.!?](?=\s|$)|\n/g),
     quotes: positions(/["“”]/g)
   };
+}
+
+// The sentence holding a match: from the last break before it to the first sentence end at or after it.
+function sentenceAround(text, marks, index) {
+  const start = (marks.breaks[lowerBound(marks.breaks, index + 1) - 1] ?? -1) + 1;
+  const end = marks.ends[lowerBound(marks.ends, index)] ?? text.length;
+  return text.slice(start, end + 1).trim();
 }
 
 // An odd number of double quotes between the start of the line and the match.

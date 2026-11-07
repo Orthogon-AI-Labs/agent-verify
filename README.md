@@ -38,7 +38,7 @@ agent-verify needs Node 18 or newer and has no npm dependencies. Once installed 
 | "tests pass" | your test command exits 0 |
 | "updated `src/app.ts`" | the file exists in the project and was edited in this session |
 | "committed the changes" | the latest commit was made in this session |
-| "pushed the branch" | the branch has an upstream and no unpushed commits |
+| "pushed the branch" | the branch has an upstream and no unpushed commits. If this turn ran `git push` only in other git checkouts, those are checked instead. |
 | "opened a PR" | `gh pr view` finds a pull request for the current branch |
 | "protected sections are intact" | no [canon](https://github.com/Orthogon-AI-Labs/canon) protected block has changed since the last commit |
 | "I didn't change the tests", "without modifying any test files", "leaving the tests as they were" or "nothing in `tests/` changed" | git shows no test file (or no file in the named folder) modified, deleted or renamed this session. Adding a new test file is fine. |
@@ -46,7 +46,7 @@ agent-verify needs Node 18 or newer and has no npm dependencies. Once installed 
 
 The test command comes from `verify.config.json` if you set one. Otherwise agent-verify uses the `test` script in `package.json` (run with npm, pnpm, yarn or bun, whichever lockfile is present), `cargo test`, `go test ./...` or `python3 -m pytest -q` (with the project's `.venv` Python if there is one). If the program that runs the tests isn't installed, a "tests pass" claim is marked inconclusive.
 
-Some claims can't be checked: there's no test command, `python3` or `gh` is missing, or the folder isn't a git repository. Those claims are marked **inconclusive**, not false.
+Some claims can't be checked: there's no test command, `python3` or `gh` is missing, or the folder isn't a git repository. Those claims are marked **inconclusive**, not false. So are test and git claims when this turn's work was all in another git checkout, or when the claim's sentence names an open pull request on a branch other than the folder's, for example a report relayed from another session.
 
 agent-verify blocks a reply at most once and never edits your code. It has no telemetry.
 

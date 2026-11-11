@@ -102,6 +102,26 @@ test("ignores push mentions that say nothing was pushed", () => {
   assert.equal(pushed("Both are fixed and pushed; nothing is merged."), true);
 });
 
+test("ignores a push that is still to come or is the reason for a plan", () => {
+  const pushed = (text) =>
+    detectClaims(text).some((claim) => claim.type === "git" && claim.action === "pushed");
+
+  assert.equal(pushed("It builds locally only; I'll get a review before anything is pushed."), false);
+  assert.equal(pushed("A review comes first, before the branch is pushed."), false);
+  assert.equal(pushed("Nothing ships until the branch is pushed."), false);
+  assert.equal(pushed("Once the changes are pushed, CI will run."), false);
+  assert.equal(pushed("I sent the fixes back to fix in one commit, so the branch is pushed only once."), false);
+  assert.equal(pushed("Batch them so that the branch is pushed once."), false);
+
+  assert.equal(pushed("I squashed them, so the branch is pushed."), true);
+  assert.equal(pushed("I rebased, so the branch is pushed and CI is green."), true);
+  assert.equal(pushed("I pushed the branch so CI could run."), true);
+  assert.equal(pushed("I ran the tests before the branch was pushed."), true);
+  assert.equal(pushed("Before you ask, the branch is pushed."), true);
+  assert.equal(pushed("I pushed the branch before anything else."), true);
+  assert.equal(pushed("The review is done and the branch is pushed."), true);
+});
+
 test("ignores git claims inside double quotes", () => {
   const git = (text) => detectClaims(text).filter((claim) => claim.type === "git").map((claim) => claim.action);
 

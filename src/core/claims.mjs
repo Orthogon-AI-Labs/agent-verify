@@ -155,6 +155,11 @@ const NEGATION_LIST_WINDOW = 80;
 const CLAUSE_BREAK = /[.!?;:](?=\s)|\n|,\s+(?:and|but|so)\s/g;
 const NEGATED_LIST_ITEM = /(?:,|\s(?:or|nor))\s*$/i;
 const NOT_DONE_YET = /\b(?:to|will|would|should|must|can|could|might)\s+(?:be|get)\s+$/i;
+// "before anything is pushed", "once the changes are pushed": an event still to come.
+const PENDING_EVENT = /\b(?:before|until|once|unless)\s+(?:(?:[\w'’-]+\s+){1,4}(?:is|are|gets?|has\s+been|have\s+been)\s+|(?:the|this|that|my|any|all)\s+)$/i;
+// "so that the branch is pushed", "so the branch is pushed only once": the reason for a plan.
+const PURPOSE_BEFORE = /\bso\s+(that\s+)?(?:[\w'’-]+\s+){0,4}$/i;
+const ONCE_AFTER = /^\s+(?:only\s+)?once\b/i;
 const NOTHING_AFTER = /^\s+(?:and\s+\w+\s+)?(?:nothing|none)\b/i;
 const NEGATION_PATTERN = /(?:^|[^\w-])(?:not|never|no|nothing|none|nobody|neither|nor|didn['’]t|doesn['’]t|don['’]t|did not|haven['’]t|have not|hasn['’]t|has not|wasn['’]t|was not|weren['’]t|isn['’]t|aren['’]t|won['’]t|will not|cannot|can['’]t)(?=$|[^\w-])/i;
 
@@ -299,7 +304,8 @@ function detectGitClaims(text) {
   for (const pattern of GIT_PATTERNS) {
     for (const match of text.matchAll(pattern.regex)) {
       const end = (match.index ?? 0) + match[0].length;
-      if (hasNearbyNegation(text, match.index ?? 0) || NOTHING_AFTER.test(text.slice(end, end + 40))) {
+      if (hasNearbyNegation(text, match.index ?? 0) || NOTHING_AFTER.test(text.slice(end, end + 40)) ||
+          isPendingOrPurpose(text, match.index ?? 0, end)) {
         continue;
       }
       // A quoted sentence (the claim "I opened a pull request" was blocked) is about a claim, not one.
@@ -483,6 +489,17 @@ function hasNearbyNegation(text, index) {
 
   // "Nothing is committed, staged or pushed": the claim is an item in a negated list.
   return NEGATED_LIST_ITEM.test(clause) && NEGATION_PATTERN.test(clause);
+}
+
+// "I'll get a review before anything is pushed", "so the branch is pushed only once": the git action is
+// still to come or is the reason for a plan, not a report that it happened.
+function isPendingOrPurpose(text, start, end) {
+  const before = text.slice(Math.max(0, start - NEGATION_LIST_WINDOW), start);
+  if (PENDING_EVENT.test(currentClause(before))) {
+    return true;
+  }
+  const purpose = before.slice(-40).match(PURPOSE_BEFORE);
+  return Boolean(purpose) && (Boolean(purpose[1]) || ONCE_AFTER.test(text.slice(end, end + 20)));
 }
 
 // Text after the last sentence or clause break, so a negation earlier in the reply doesn't cancel a later claim.

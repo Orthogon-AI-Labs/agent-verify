@@ -8,8 +8,11 @@ const MAX_DIRS = 100;
 // `cd <dir>`, `pushd <dir>` at the start of a command or after `&&`, `||`, `;`, `(`; and `git -C <dir>`.
 const DIR_ARGUMENT = String.raw`("[^"]*"|'[^']*'|[^\s;&|()]+)`;
 const COMMAND_DIRS = new RegExp(String.raw`(?:^|&&|\|\||[;\n(])\s*(?:cd|pushd)\s+${DIR_ARGUMENT}|\bgit\s+-C\s+${DIR_ARGUMENT}`, "g");
+const CD_STEP = String.raw`(?:^|&&|\|\||[;\n(])\s*(?:cd|pushd)\s+(?<cd>${DIR_ARGUMENT})`;
 // The same `cd` / `pushd`, and `git push` or `git -C <dir> push`.
-const PUSH_STEPS = new RegExp(String.raw`(?:^|&&|\|\||[;\n(])\s*(?:cd|pushd)\s+(?<cd>${DIR_ARGUMENT})|\bgit\s+(?:-C\s+(?<gitDir>${DIR_ARGUMENT})\s+)?push\b`, "g");
+const PUSH_STEPS = new RegExp(String.raw`${CD_STEP}|\bgit\s+(?:-C\s+(?<gitDir>${DIR_ARGUMENT})\s+)?push\b`, "g");
+// The same `cd` / `pushd`, and a test run: a package manager's test script, or a common test runner.
+const TEST_STEPS = new RegExp(String.raw`${CD_STEP}|\b(?:npm|pnpm|yarn|bun|turbo|nx)\b[^|;&\n]{0,200}?\btest\b|\b(?:pytest|vitest|jest|mocha|rspec|phpunit)\b|-m\s+(?:pytest|unittest)\b|\b(?:cargo|go|make|deno|dotnet|mvn|gradle|gradlew|mix)\s+test\b|\bnode\s+--test\b|\bplaywright\s+test\b`, "g");
 const MAX_PR_REFS = 3;
 
 // When this turn's edits and `cd` / `git -C` targets are all in git checkouts other than the one at cwd, the agent
@@ -30,7 +33,7 @@ export async function workElsewhere(cwd, evidence) {
   }
   for (const entry of evidence.bashCommands ?? []) {
     if (inTurn(entry.at)) {
-      for (const dir of commandDirs(entry.command, cwd)) {
+      for (const dir of commandDirs(entry.command, startDir(entry, cwd))) {
         dirs.add(dir);
       }
     }
@@ -56,25 +59,12 @@ export async function workElsewhere(cwd, evidence) {
 // ("PaperMatrix: pushed" while the session folder is another repo). Null when there was no push, one ran in cwd's
 // checkout, or a push's folder can't be read from the command text.
 export async function pushRoots(cwd, evidence) {
-  const inTurn = turnFilter(evidence);
   const dirs = new Set();
-  for (const entry of evidence.bashCommands ?? []) {
-    if (!inTurn(entry.at)) {
-      continue;
+  for (const dir of turnActionDirs(cwd, evidence, PUSH_STEPS)) {
+    if (!dir) {
+      return null;
     }
-    let base = cwd;
-    for (const match of String(entry.command).matchAll(PUSH_STEPS)) {
-      const { cd, gitDir } = match.groups;
-      if (cd !== undefined) {
-        base = base && resolveDir(base, cd);
-        continue;
-      }
-      const dir = gitDir === undefined ? base : base && resolveDir(base, gitDir);
-      if (!dir) {
-        return null;
-      }
-      dirs.add(dir);
-    }
+    dirs.add(dir);
   }
   if (dirs.size === 0 || dirs.size > MAX_DIRS) {
     return null;
@@ -90,6 +80,99 @@ export async function pushRoots(cwd, evidence) {
     roots.add(root);
   }
   return [...roots];
+}
+
+// Whether this session recorded any tool use. Without it (the CLI, Codex notify) Verify can't tell where the work was.
+export function recordedWork(evidence) {
+  return (evidence.touchedFiles?.length ?? 0) + (evidence.bashCommands?.length ?? 0) > 0;
+}
+
+// Whether this turn ran `git push` anywhere.
+export function pushedThisTurn(cwd, evidence) {
+  return turnActionDirs(cwd, evidence, PUSH_STEPS).length > 0;
+}
+
+// Whether this turn edited a file or ran tests in cwd's git checkout: { here, cwdRoot }. Null when Verify can't tell:
+// cwd isn't in a checkout, a test ran in a folder the command text doesn't name, or there are too many folders.
+export async function testedOrEditedHere(cwd, evidence) {
+  const cwdRoot = await gitRoot(cwd);
+  if (!cwdRoot) {
+    return null;
+  }
+
+  const inTurn = turnFilter(evidence);
+  const dirs = new Set();
+  for (const entry of evidence.touchedFiles ?? []) {
+    if (inTurn(entry.lastAt ?? entry.at)) {
+      dirs.add(path.dirname(entry.path));
+    }
+  }
+  for (const dir of turnActionDirs(cwd, evidence, TEST_STEPS)) {
+    if (!dir) {
+      return null;
+    }
+    dirs.add(dir);
+  }
+  if (dirs.size > MAX_DIRS) {
+    return null;
+  }
+
+  for (const dir of dirs) {
+    if (await gitRoot(existingAncestor(dir)) === cwdRoot) {
+      return { here: true, cwdRoot };
+    }
+  }
+  return { here: false, cwdRoot };
+}
+
+// Where a claimed relative path that isn't at cwd is: the folder it is relative to in a file this session touched, else
+// another git checkout this turn edited files or ran commands in that has it. Null when neither has it.
+export async function claimedFileFolder(cwd, relativePath, evidence) {
+  const relative = path.normalize(relativePath);
+  if (!relative || relative === "." || path.isAbsolute(relative) || relative.startsWith("..")) {
+    return null;
+  }
+
+  const suffix = path.sep + relative;
+  for (const entry of evidence.touchedFiles ?? []) {
+    const file = path.normalize(String(entry.path));
+    if (file.endsWith(suffix) && fs.existsSync(file)) {
+      return file.slice(0, -suffix.length);
+    }
+  }
+
+  const inTurn = turnFilter(evidence);
+  const dirs = new Set();
+  for (const entry of evidence.touchedFiles ?? []) {
+    if (inTurn(entry.lastAt ?? entry.at)) {
+      dirs.add(path.dirname(entry.path));
+    }
+  }
+  for (const entry of evidence.bashCommands ?? []) {
+    if (inTurn(entry.at)) {
+      if (entry.cwd) {
+        dirs.add(entry.cwd);
+      }
+      for (const dir of commandDirs(entry.command, startDir(entry, cwd))) {
+        dirs.add(dir);
+      }
+    }
+  }
+  if (dirs.size > MAX_DIRS) {
+    return null;
+  }
+
+  const tried = new Set();
+  for (const dir of dirs) {
+    const root = await gitRoot(existingAncestor(dir));
+    if (root && !tried.has(root)) {
+      tried.add(root);
+      if (fs.existsSync(path.join(root, relative))) {
+        return root;
+      }
+    }
+  }
+  return null;
 }
 
 // When a claim's sentence names an open PR on a branch other than the one checked out at cwd ("#281 is rebased, with
@@ -155,6 +238,32 @@ function resolveDir(base, argument) {
   const raw = argument.replace(/^(["'])(.*)\1$/, "$2");
   const expanded = raw.replace(/^(?:~|\$HOME|\$\{HOME\})(?=\/|$)/, os.homedir());
   return expanded === "-" || /[$`]/.test(expanded) ? null : path.resolve(base, expanded);
+}
+
+// The folder each matching action in this turn's commands ran in, in order; null for one the text can't place.
+function turnActionDirs(cwd, evidence, steps) {
+  const inTurn = turnFilter(evidence);
+  const dirs = [];
+  for (const entry of evidence.bashCommands ?? []) {
+    if (!inTurn(entry.at)) {
+      continue;
+    }
+    let base = startDir(entry, cwd);
+    for (const match of String(entry.command).matchAll(steps)) {
+      const { cd, gitDir } = match.groups;
+      if (cd !== undefined) {
+        base = base && resolveDir(base, cd);
+        continue;
+      }
+      dirs.push(gitDir === undefined ? base : base && resolveDir(base, gitDir));
+    }
+  }
+  return dirs;
+}
+
+// Where a command started; a record without it (older versions) counts as where the session is now.
+function startDir(entry, cwd) {
+  return typeof entry.cwd === "string" && entry.cwd ? entry.cwd : cwd;
 }
 
 // Whether a time is in this turn: since the last Stop, else since the session started.

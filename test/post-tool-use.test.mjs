@@ -86,14 +86,38 @@ test("post-tool-use hook records bash commands and dedupes repeated files", asyn
   assert.equal(evidence.bashCommands[0].command, "ls -la");
 });
 
+test("Claude Code's hooks record failed Bash commands too, and say so", async () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-ptu-"));
+  const dataRoot = path.join(fixture, ".plugin-data");
+  const hooks = JSON.parse(fs.readFileSync(path.join(repoRoot, "hooks", "hooks.json"), "utf8")).hooks;
+  assert.equal(hooks.PostToolUseFailure[0].matcher, "Bash");
+  for (const event of ["PostToolUse", "PostToolUseFailure"]) {
+    assert.ok(hooks[event][0].hooks[0].args.includes("--failed-commands-recorded"), event);
+  }
+
+  await runHook({ session_id: "plain", cwd: fixture, tool_name: "Bash", tool_input: { command: "ls" } }, { CLAUDE_PLUGIN_DATA: dataRoot });
+  assert.equal(readEvidence(dataRoot, "plain").failedCommandsRecorded, undefined);
+  await runHook({
+    session_id: "claude",
+    cwd: fixture,
+    hook_event_name: "PostToolUseFailure",
+    tool_name: "Bash",
+    tool_input: { command: "npm test" },
+    error: "Exit code 1"
+  }, { CLAUDE_PLUGIN_DATA: dataRoot }, ["--failed-commands-recorded"]);
+  const evidence = readEvidence(dataRoot, "claude");
+  assert.equal(evidence.failedCommandsRecorded, true);
+  assert.deepEqual(evidence.bashCommands.map((entry) => [entry.command, entry.cwd]), [["npm test", fixture]]);
+});
+
 function readEvidence(dataRoot, sessionId) {
   const file = path.join(dataRoot, "sessions", `${sessionId}.json`);
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
-function runHook(payload, extraEnv = {}) {
+function runHook(payload, extraEnv = {}, args = []) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [hook], {
+    const child = spawn(process.execPath, [hook, ...args], {
       env: { ...process.env, ...extraEnv },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true

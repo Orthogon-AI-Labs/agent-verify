@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { runBinary } from "../src/core/command.mjs";
 import { emptyEvidence, loadSessionEvidence, recordPostToolUse, recordStop } from "../src/core/evidence.mjs";
-import { commandDirs, otherBranchPr, pushRoots, workElsewhere } from "../src/core/elsewhere.mjs";
+import { claimedFileFolder, commandDirs, otherBranchPr, pushedThisTurn, pushRoots, workElsewhere } from "../src/core/elsewhere.mjs";
 import { verifyFinalMessage } from "../src/core/verify.mjs";
 
 test("reads the folders a shell command changes into", () => {
@@ -61,9 +61,14 @@ test("test and git claims are inconclusive when the turn's work was in another c
     test: { command: `${JSON.stringify(process.execPath)} -e "process.exit(1)"`, timeoutMs: 10000 }
   }));
   const message = "All tests pass, and I pushed the branch.";
-  const verify = (file) => verifyFinalMessage(
+  const verify = (file, commands = []) => verifyFinalMessage(
     { cwd, session_id: "test", last_assistant_message: message },
-    { evidence: { ...emptyEvidence("test", cwd), startedAt: new Date(Date.now() - 120000).toISOString(), touchedFiles: [{ path: file, normalizedPath: file, at: new Date().toISOString() }] } }
+    { evidence: {
+      ...emptyEvidence("test", cwd),
+      startedAt: new Date(Date.now() - 120000).toISOString(),
+      touchedFiles: [{ path: file, normalizedPath: file, at: new Date().toISOString() }],
+      bashCommands: commands.map((command) => ({ command, at: new Date().toISOString(), cwd }))
+    } }
   );
 
   const elsewhere = await verify(path.join(other, "a.js"));
@@ -71,7 +76,7 @@ test("test and git claims are inconclusive when the turn's work was in another c
   assert.match(elsewhere.results[0].summary, /^Claimed tests passed, but this turn's edits and commands were in /);
   assert.equal(elsewhere.shouldBlock, false);
 
-  const here = await verify(path.join(cwd, "a.js"));
+  const here = await verify(path.join(cwd, "a.js"), ["git push"]);
   assert.deepEqual(here.results.map((result) => [result.verifier, result.status]), [["tests", "fail"], ["git", "fail"]]);
 });
 
@@ -177,6 +182,122 @@ esac
     process.env.PATH = savedPath;
     delete process.env.GH_STUB;
   }
+});
+
+test("a command is recorded with the folder it started in", () => {
+  const dataRoot = tempDir();
+  const a = path.join(dataRoot, "a");
+  const b = path.join(dataRoot, "b");
+  const record = (session, input) => recordPostToolUse({ session_id: session, tool_input: {}, ...input }, dataRoot).bashCommands.at(-1);
+
+  // The hook gets the folder after the command; the next command starts there.
+  assert.equal(record("main", { cwd: a, tool_name: "Bash", tool_input: { command: "pnpm test" } }).cwd, a);
+  assert.equal(record("main", { cwd: b, tool_name: "Bash", tool_input: { command: "cd ../b && git push" } }).cwd, a);
+  assert.equal(record("main", { cwd: b, tool_name: "Bash", tool_input: { command: "git status" } }).cwd, b);
+  // A first command that changes folders: where it started is unknown.
+  assert.equal(record("fresh", { cwd: b, tool_name: "Bash", tool_input: { command: "cd ../b && ls" } }).cwd, undefined);
+  // Edits and Stop also say where the shell is.
+  recordPostToolUse({ session_id: "edit", cwd: a, tool_name: "Edit", tool_input: { file_path: path.join(a, "x.js") } }, dataRoot);
+  assert.equal(record("edit", { cwd: b, tool_name: "Bash", tool_input: { command: "cd ../b" } }).cwd, a);
+  recordStop("stop", b, dataRoot);
+  assert.equal(record("stop", { cwd: a, tool_name: "Bash", tool_input: { command: "cd ../a" } }).cwd, b);
+  // A subagent's shell doesn't keep a `cd`, and doesn't move the main agent's.
+  assert.equal(record("main", { cwd: a, agent_id: "x1", tool_name: "Bash", tool_input: { command: "cd ../b && ls" } }).cwd, a);
+  assert.equal(record("main", { cwd: b, tool_name: "Bash", tool_input: { command: "ls" } }).cwd, b);
+  // Qwen Code's shell tool takes the folder as an argument.
+  assert.equal(record("qwen", { cwd: a, tool_name: "run_shell_command", tool_input: { command: "npm test", directory: "pkg" } }).cwd, path.join(a, "pkg"));
+});
+
+test("test and push claims are checked only where this turn did that work", { skip: process.platform === "win32" }, async (t) => {
+  if ((await runBinary("git", ["--version"])).exitCode !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const { cwd, other, worktree } = await checkouts();
+  const git = (dir, args) => runBinary("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", ...args], { cwd: dir });
+  // cwd is a commit ahead of origin/main and its tests fail; the worktree's push landed.
+  for (const dir of [cwd, worktree]) {
+    await git(dir, ["update-ref", `refs/remotes/origin/${dir === cwd ? "main" : "w"}`, "HEAD"]);
+  }
+  await git(cwd, ["remote", "add", "origin", path.join(cwd, "nowhere")]);
+  await git(cwd, ["commit", "-q", "--allow-empty", "-m", "parked"]);
+  fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({
+    test: { command: `${JSON.stringify(process.execPath)} -e "process.exit(1)"`, timeoutMs: 10000 }
+  }));
+
+  const now = () => new Date().toISOString();
+  const turn = ({ commands = [], edits = [] }, failedCommandsRecorded = true) => ({
+    ...emptyEvidence("test", cwd),
+    failedCommandsRecorded,
+    startedAt: new Date(Date.now() - 120000).toISOString(),
+    bashCommands: commands.map(([command, ranIn = cwd]) => ({ command, at: now(), cwd: ranIn })),
+    touchedFiles: edits.map((file) => ({ path: file, normalizedPath: file, at: now() }))
+  });
+  const result = async (message, evidence, verifier) =>
+    (await verifyFinalMessage({ cwd, session_id: "test", last_assistant_message: message }, { evidence })).results.find((r) => r.verifier === verifier);
+  const tests = (evidence) => result("All tests pass.", evidence, "tests");
+  const pushed = (evidence) => result("I pushed the branch.", evidence, "git");
+
+  // Real wrong blocks: CI results, and a report relayed from another session, read as this folder's suite.
+  const ciOnly = await tests(turn({ commands: [["gh run view 123 --log-failed"]] }));
+  assert.equal(ciOnly.status, "inconclusive");
+  assert.match(ciOnly.summary, /^Claimed tests passed, but this turn didn't edit files or run tests in `.+`, so Verify did not check it here\.$/);
+  // Checked here: a test run, also in a subfolder, or an edit.
+  assert.equal((await tests(turn({ commands: [["gh run view 123"], ["pnpm test"]] }))).status, "fail");
+  assert.equal((await tests(turn({ commands: [["cd packages/a && npx vitest run"]] }))).status, "fail");
+  assert.equal((await tests(turn({ edits: [path.join(cwd, "src", "a.js")] }))).status, "fail");
+  // A test run in a folder the text doesn't name, no tool use recorded at all, or a client that may not record failed
+  // commands (Codex, Qwen Code): checked here, as before.
+  assert.equal((await tests(turn({ commands: [[`cd "$W" && pnpm test`]] }))).status, "fail");
+  assert.equal((await tests(turn({}))).status, "fail");
+  assert.equal((await tests(turn({ commands: [["gh run view 123 --log-failed"]] }, false))).status, "fail");
+
+  // Real wrong blocks: "before it's pushed" and "say if you want them pushed" in turns that pushed nothing.
+  const none = await pushed(turn({ commands: [["git status"]] }));
+  assert.equal(none.status, "inconclusive");
+  assert.equal(none.summary, "Claimed the branch was pushed, but this turn ran no `git push`, so Verify did not check it.");
+  assert.equal((await pushed(turn({ commands: [["git push"]] }))).status, "fail");
+  assert.equal((await pushed(turn({ commands: [["git status"]] }, false))).status, "fail");
+  // A real wrong block: the push ran from a worktree the shell had moved to, then into a sibling.
+  const fromWorktree = await pushed(turn({ commands: [[`cd ../w && git push origin w`, path.join(worktree, "..", "x")]] }));
+  assert.equal(fromWorktree.status, "pass");
+  assert.match(fromWorktree.summary, /Checked in `.+[/\\]w`, where this turn ran `git push`\.$/);
+  assert.equal(pushedThisTurn(cwd, turn({ commands: [["git -C ../x push"]] })), true);
+});
+
+test("a claimed file that isn't in this folder is checked where the session worked", { skip: process.platform === "win32" }, async (t) => {
+  if ((await runBinary("git", ["--version"])).exitCode !== 0) {
+    t.skip("git is not available");
+    return;
+  }
+
+  const { cwd, other } = await checkouts();
+  const notes = fs.realpathSync(tempDir());
+  const spec = path.join(other, "packages", "a", "test", "a.spec.ts");
+  fs.mkdirSync(path.dirname(spec), { recursive: true });
+  fs.writeFileSync(spec, "test\n");
+  const now = new Date().toISOString();
+  const evidence = (touched, commands = []) => ({
+    ...emptyEvidence("test", notes),
+    startedAt: new Date(Date.now() - 120000).toISOString(),
+    touchedFiles: touched.map((file) => ({ path: file, normalizedPath: file, at: now })),
+    bashCommands: commands.map((command) => ({ command, at: now, cwd: notes }))
+  });
+  const file = async (message, ev, at = notes) =>
+    (await verifyFinalMessage({ cwd: at, session_id: "test", last_assistant_message: message }, { evidence: ev })).results.find((r) => r.verifier === "files");
+
+  // A real wrong block: the shell had moved to a notes folder; the spec was edited in a worktree.
+  const touched = await file("I updated `packages/a/test/a.spec.ts`.", evidence([spec]));
+  assert.equal(touched.status, "pass");
+  assert.match(touched.summary, /Checked in `.+`, where this session worked; it isn't in `.+`\.$/);
+  // A bare file name the session touched in a subfolder.
+  assert.equal((await file("I changed `a.spec.ts`.", evidence([spec]), other)).status, "pass");
+  // Found in a checkout this turn ran commands in.
+  assert.equal((await file("I updated `packages/a/test/a.spec.ts`.", evidence([], [`cd "${other}" && git add -A`]))).status, "pass");
+  // Nowhere the session worked: still a fail.
+  assert.equal((await file("I updated `packages/a/test/missing.spec.ts`.", evidence([spec]))).status, "fail");
+  assert.equal(await claimedFileFolder(cwd, "../a.spec.ts", evidence([spec])), null);
 });
 
 async function checkouts() {

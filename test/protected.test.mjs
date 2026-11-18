@@ -75,7 +75,7 @@ test("protected verifier allows configured block names", async () => {
   assert.equal(result.status, "pass");
 });
 
-test("protected verifier reports marker syntax errors as inconclusive", async () => {
+test("protected verifier fails when a committed block's markers are broken into nested ones", async () => {
   const cwd = await createProtectedRepo();
   copyFixture("nested.md", path.join(cwd, "docs", "protected.md"));
 
@@ -86,11 +86,13 @@ test("protected verifier reports marker syntax errors as inconclusive", async ()
     config: loadConfig(cwd)
   });
 
-  assert.equal(result.status, "inconclusive");
-  assert.match(result.summary, /invalid protected marker syntax/i);
+  // The committed block "example" is gone; the syntax error is reported alongside it.
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "docs/protected.md", name: "example" }]);
+  assert.match(result.details, /invalid protected marker syntax/i);
 });
 
-test("protected verifier reports unmatched markers as inconclusive", async () => {
+test("protected verifier fails when a committed block loses its end marker", async () => {
   const cwd = await createProtectedRepo();
   copyFixture("unmatched.md", path.join(cwd, "docs", "protected.md"));
 
@@ -101,8 +103,126 @@ test("protected verifier reports unmatched markers as inconclusive", async () =>
     config: loadConfig(cwd)
   });
 
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "docs/protected.md", name: "example" }]);
+  assert.match(result.details, /missing an end marker/i);
+});
+
+test("protected verifier is inconclusive when only marker syntax is broken", async () => {
+  const cwd = await createProtectedRepo();
+  writeFile(path.join(cwd, "docs", "protected.md"), `${baseBlock("example", "Original protected text.")}<!-- canon:protected:end -->\n`);
+
+  const result = await verifyProtectedClaim({
+    cwd,
+    claim,
+    evidence: emptyEvidence("protected-stray-end", cwd),
+    config: loadConfig(cwd)
+  });
+
   assert.equal(result.status, "inconclusive");
-  assert.match(result.summary, /missing an end marker/i);
+  assert.match(result.summary, /end marker without matching start marker/i);
+});
+
+test("protected verifier still fails a changed block when another file has a marker syntax error", async () => {
+  const cwd = await createProtectedRepo({
+    files: { "a.md": baseBlock("voice", "Original voice."), "b.md": baseBlock("other", "Other.") }
+  });
+  writeFile(path.join(cwd, "a.md"), baseBlock("voice", "Rewritten voice."));
+  writeFile(path.join(cwd, "b.md"), `${baseBlock("other", "Other.")}<!-- canon:protected:end -->\n`);
+
+  const result = await runProtected(cwd, "protected-masked");
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "a.md", name: "voice" }]);
+});
+
+test("protected verifier fails a rewritten block whose name contains marker-error words", async () => {
+  const name = "no nested protected blocks policy";
+  const cwd = await createProtectedRepo({ files: { "a.md": baseBlock(name, "Original.") } });
+  writeFile(path.join(cwd, "a.md"), baseBlock(name, "Rewritten."));
+
+  const result = await runProtected(cwd, "protected-keyword-name");
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "a.md", name }]);
+});
+
+test("protected verifier names a block changed alongside a broken marker in the same file", async () => {
+  const marked = (name, body) => `<!-- canon:protected:start name="${name}" -->\n${body}\n<!-- canon:protected:end -->\n`;
+  // Deleting " (draft)" with an empty new_string also deletes the newline, joining the marker onto the heading.
+  const text = "## Voice (draft)\n" + marked("voice", "Write plainly.") + "\n" + marked("rules", "Use the blue gateway.");
+  const cwd = await createProtectedRepo({ files: { "doc.md": text } });
+  writeFile(path.join(cwd, "doc.md"), text.replace(" (draft)\n", "").replace("blue", "green"));
+
+  const result = await runProtected(cwd, "protected-broken-and-changed");
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks.map((block) => block.name).sort(), ["rules", "voice"]);
+});
+
+test("protected verifier passes an allowed name that starts with a dash", async () => {
+  const cwd = await createProtectedRepo({
+    files: { "a.md": baseBlock("voice", "Original."), "b.md": baseBlock("-draft", "Draft.") }
+  });
+  writeFile(path.join(cwd, "b.md"), baseBlock("-draft", "Draft, rewritten."));
+  fs.writeFileSync(path.join(cwd, "verify.config.json"), JSON.stringify({ protected: { allowed: ["-draft"] } }));
+  assert.equal((await runProtected(cwd, "protected-dash-allowed")).status, "pass");
+
+  writeFile(path.join(cwd, "a.md"), baseBlock("voice", "Rewritten."));
+  const result = await runProtected(cwd, "protected-dash-other");
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "a.md", name: "voice" }]);
+});
+
+test("protected verifier sees changes in files with non-ASCII and upper-case names", async () => {
+  for (const file of ["café.md", "日本語/規則.md", "GUIDE.MD"]) {
+    const cwd = await createProtectedRepo({ files: { [file]: baseBlock("b", "Original.") } });
+    writeFile(path.join(cwd, file), baseBlock("b", "Rewritten."));
+    const result = await runProtected(cwd, "protected-names");
+    assert.equal(result.status, "fail", file);
+    assert.deepEqual(result.blocks, [{ path: file, name: "b" }]);
+  }
+});
+
+test("protected verifier reports every file when a block name isn't valid UTF-8", async () => {
+  const named = (body) => Buffer.from(`<!-- canon:protected:start name="caf\xe9" -->\n${body}\n<!-- canon:protected:end -->\n`, "latin1");
+  const cwd = await createProtectedRepo({ files: { "a.md": baseBlock("voice", "Original."), "z.md": named("Old.") } });
+  writeFile(path.join(cwd, "a.md"), baseBlock("voice", "Rewritten."));
+  writeFile(path.join(cwd, "z.md"), named("New."));
+  const saved = process.env.PYTHONIOENCODING;
+  process.env.PYTHONIOENCODING = "utf-8:strict";  // what a UTF-8 locale gives the checker
+  try {
+    const result = await runProtected(cwd, "protected-non-utf8-name");
+    assert.equal(result.status, "fail");
+    assert.deepEqual(result.blocks.map((block) => block.path), ["a.md", "z.md"]);
+  } finally {
+    if (saved === undefined) delete process.env.PYTHONIOENCODING;
+    else process.env.PYTHONIOENCODING = saved;
+  }
+});
+
+test("protected verifier ignores a checker that the repository under verification supplies", async () => {
+  const cwd = await createProtectedRepo();
+  copyFixture("modified.md", path.join(cwd, "docs", "protected.md"));
+  for (const dir of [[".canon", "bin"], [".canon", "codex", "bin"]]) {
+    writeFile(path.join(cwd, ...dir, "check-protected-sections.py"), "print('[canon protected-sections]')\nprint('ok: protected sections are intact')\n");
+  }
+
+  const result = await runProtected(cwd, "protected-planted-checker");
+  assert.equal(result.status, "fail");
+  assert.deepEqual(result.blocks, [{ path: "docs/protected.md", name: "example" }]);
+});
+
+test("protected verifier passes a merge conflict outside every block", async () => {
+  const text = baseBlock("example", "Keep this.") + "Footer.\n";
+  const cwd = await createProtectedRepo({ files: { "notes.md": text } });
+  await git(cwd, ["checkout", "-q", "-b", "topic"]);
+  writeFile(path.join(cwd, "notes.md"), text.replace("Footer.", "Footer T."));
+  await git(cwd, ["commit", "-qam", "topic"]);
+  await git(cwd, ["checkout", "-q", "-"]);
+  writeFile(path.join(cwd, "notes.md"), text.replace("Footer.", "Footer M."));
+  await git(cwd, ["commit", "-qam", "main"]);
+  const merge = await runBinary("git", ["merge", "topic"], { cwd, timeoutMs: 10000 });
+  assert.notEqual(merge.exitCode, 0, "the merge should stop with a conflict");
+
+  assert.equal((await runProtected(cwd, "protected-merge-conflict")).status, "pass");
 });
 
 test("protected verifier lists only modified files in multi-file repos", async () => {
@@ -219,6 +339,10 @@ test("protected verifier still fails when the checker reports a failure line it 
 
   assert.equal(result.status, "fail");
 });
+
+function runProtected(cwd, session) {
+  return verifyProtectedClaim({ cwd, claim, evidence: emptyEvidence(session, cwd), config: loadConfig(cwd) });
+}
 
 async function createProtectedRepo(options = {}) {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "agent-verify-protected-"));

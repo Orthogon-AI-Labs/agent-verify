@@ -8,7 +8,24 @@
             "type": "command",
             "command": "node",
             "args": [
-              "${CLAUDE_PLUGIN_ROOT}/src/adapters/claude/post-tool-use.mjs"
+              "${CLAUDE_PLUGIN_ROOT}/src/adapters/claude/post-tool-use.mjs",
+              "--failed-commands-recorded"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/src/adapters/claude/post-tool-use.mjs",
+              "--failed-commands-recorded"
             ],
             "timeout": 5
           }

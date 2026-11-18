@@ -46,7 +46,7 @@ agent-verify needs Node 18 or newer and has no npm dependencies. Once installed 
 
 The test command comes from `verify.config.json` if you set one. Otherwise agent-verify uses the `test` script in `package.json` (run with npm, pnpm, yarn or bun, whichever lockfile is present), `cargo test`, `go test ./...` or `python3 -m pytest -q` (with the project's `.venv` Python if there is one). If the program that runs the tests isn't installed, a "tests pass" claim is marked inconclusive.
 
-Some claims can't be checked: there's no test command, `python3` or `gh` is missing, or the folder isn't a git repository. Those claims are marked **inconclusive**, not false. So are test and git claims when this turn's work was all in another git checkout, or when the claim's sentence names an open pull request on a branch other than the folder's, for example a report relayed from another session.
+Some claims can't be checked: there's no test command, `python3` or `gh` is missing, or the folder isn't a git repository. Those claims are marked **inconclusive**, not false. So are test and git claims when this turn's work was all in another git checkout, or when the claim's sentence names an open pull request on a branch other than the folder's, for example a report relayed from another session. In Claude Code, which reports failed commands too, a test claim is also inconclusive when the turn neither edited files nor ran tests in the folder's checkout, and a push claim when the turn ran no `git push`. A push is checked in the checkout the push ran in, and a claimed file that isn't in the folder is looked for where the session worked.
 
 agent-verify blocks a reply at most once and never edits your code. It has no telemetry.
 

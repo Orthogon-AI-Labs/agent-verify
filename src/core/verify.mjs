@@ -7,7 +7,9 @@ import { verifyGitClaim } from "./verifiers/git.mjs";
 import { verifyProtectedClaim } from "./verifiers/protected.mjs";
 import { verifySecretsClaim } from "./verifiers/secrets.mjs";
 import { verifyTestFilesClaim } from "./verifiers/unchanged-tests.mjs";
-import { otherBranchPr, pushRoots, workElsewhere } from "./elsewhere.mjs";
+import { claimedFileFolder, otherBranchPr, pushedThisTurn, pushRoots, recordedWork, testedOrEditedHere, workElsewhere } from "./elsewhere.mjs";
+import { resolveProjectPath } from "./paths.mjs";
+import fs from "node:fs";
 
 const CLAIM_WORDS = {
   tests: "Claimed tests passed",
@@ -37,14 +39,26 @@ export async function verifyFinalMessage(input, options = {}) {
     return lookups.get(claim.sentence);
   };
 
+  // When every shell command of the session is recorded, failed ones too (Claude Code), a test or push claim is checked
+  // only where this turn did that kind of work. A claimed file missing at cwd is looked for wherever the session worked.
+  const recorded = recordedWork(evidence);
+  const complete = recorded && evidence.failedCommandsRecorded === true;
+
   const testClaim = claims.find((claim) => claim.type === "tests");
   if (testClaim && isVerifierEnabled(config, "tests")) {
-    results.push(await checkHere("tests", CLAIM_WORDS.tests, testClaim, elsewhere, otherPr, () => verifyTestsClaim({ cwd, config, evidence })));
+    const work = complete && !elsewhere ? await testedOrEditedHere(cwd, evidence) : null;
+    results.push(work && !work.here
+      ? {
+          verifier: "tests",
+          status: "inconclusive",
+          summary: `${CLAIM_WORDS.tests}, but this turn didn't edit files or run tests in \`${work.cwdRoot}\`, so Verify did not check it here.`
+        }
+      : await checkHere("tests", CLAIM_WORDS.tests, testClaim, elsewhere, otherPr, () => verifyTestsClaim({ cwd, config, evidence })));
   }
 
   if (isVerifierEnabled(config, "files")) {
     for (const claim of claims.filter((item) => item.type === "file")) {
-      results.push(verifyFileClaim({ cwd, claim, evidence }));
+      results.push(await fileClaimWhereWorked(cwd, claim, evidence, recorded));
     }
   }
 
@@ -52,6 +66,14 @@ export async function verifyFinalMessage(input, options = {}) {
     let roots;
     for (const claim of claims.filter((item) => item.type === "git")) {
       const check = () => verifyGitClaim({ cwd, claim, evidence });
+      if (claim.action === "pushed" && complete && !pushedThisTurn(cwd, evidence)) {
+        results.push({
+          verifier: "git",
+          status: "inconclusive",
+          summary: `${CLAIM_WORDS.pushed}, but this turn ran no \`git push\`, so Verify did not check it.`
+        });
+        continue;
+      }
       if (claim.action === "pushed" && (roots ??= await pushRoots(cwd, evidence))) {
         results.push(await pushedAt(roots, claim, evidence));
         continue;
@@ -102,6 +124,19 @@ async function checkHere(verifier, claimed, claim, elsewhere, otherPr, check) {
         summary: `${claimed}, but the claim is about PR #${other.pr} on \`${other.branch}\`, and this folder is on \`${other.cwdBranch}\`, so Verify did not check it here.`
       }
     : await check();
+}
+
+// A claimed file that isn't at cwd is checked where this session touched it, or in another checkout this turn worked in.
+async function fileClaimWhereWorked(cwd, claim, evidence, recorded) {
+  const resolved = resolveProjectPath(cwd, claim.path);
+  if (recorded && resolved.insideProject && !fs.existsSync(resolved.absolutePath)) {
+    const folder = await claimedFileFolder(cwd, resolved.relativePath, evidence);
+    if (folder) {
+      const result = verifyFileClaim({ cwd: folder, claim, evidence });
+      return { ...result, summary: `${result.summary} Checked in \`${folder}\`, where this session worked; it isn't in \`${cwd}\`.` };
+    }
+  }
+  return verifyFileClaim({ cwd, claim, evidence });
 }
 
 // A push claim when this turn pushed only from other checkouts: checked in each, and the worst result kept.

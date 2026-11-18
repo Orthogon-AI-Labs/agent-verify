@@ -46,19 +46,29 @@ export function saveSessionEvidence(dataRoot, evidence) {
   fs.writeFileSync(file, `${JSON.stringify(evidence, null, 2)}\n`);
 }
 
-export function recordPostToolUse(input, dataRoot = getPluginDataRoot()) {
+export function recordPostToolUse(input, dataRoot = getPluginDataRoot(), options = {}) {
   const sessionId = input.session_id || input.sessionId || "unknown";
   const cwd = input.cwd || process.cwd();
   const evidence = loadSessionEvidence(dataRoot, sessionId, cwd);
   const at = new Date().toISOString();
+  // Every shell command is recorded, failed ones too, so a turn with none recorded ran none.
+  if (options.failedCommandsRecorded) {
+    evidence.failedCommandsRecorded = true;
+  }
 
+  const ranIn = commandFolder(input, evidence, cwd);
   evidence.cwd = cwd;
   evidence.updatedAt = at;
+  // The main agent's shell keeps a `cd`, and a hook gets the folder after the command, so the next command starts here.
+  if (!input.agent_id) {
+    evidence.shellCwd = cwd;
+  }
 
-  if (input.tool_name === "Bash" && input.tool_input?.command) {
+  if (SHELL_TOOLS.has(input.tool_name) && input.tool_input?.command) {
     evidence.bashCommands.push({
       command: String(input.tool_input.command),
-      at
+      at,
+      ...(ranIn ? { cwd: ranIn } : {})
     });
   }
 
@@ -86,7 +96,32 @@ export function recordPostToolUse(input, dataRoot = getPluginDataRoot()) {
 export function recordStop(sessionId, cwd, dataRoot = getPluginDataRoot()) {
   const evidence = loadSessionEvidence(dataRoot, sessionId, cwd);
   evidence.lastStopAt = new Date().toISOString();
+  evidence.shellCwd = cwd;
   saveSessionEvidence(dataRoot, evidence);
+}
+
+// Claude Code runs Bash, Qwen Code run_shell_command.
+const SHELL_TOOLS = new Set(["Bash", "run_shell_command"]);
+const CHANGES_FOLDER = /(?:^|&&|\|\||[;\n(])\s*(?:cd|pushd)\s/;
+
+// The folder a shell command started in, or null when that can't be told. A subagent's shell doesn't keep a `cd`, and
+// Qwen Code's tool takes the folder as an argument. For the main agent it is where the last command or Stop left the
+// shell; failing that, a command that doesn't change folders started where it ended.
+function commandFolder(input, evidence, cwd) {
+  if (!SHELL_TOOLS.has(input.tool_name)) {
+    return null;
+  }
+  const directory = input.tool_input?.directory;
+  if (input.tool_name === "run_shell_command" && typeof directory === "string" && directory) {
+    return path.resolve(cwd, directory);
+  }
+  if (input.agent_id) {
+    return cwd;
+  }
+  if (typeof evidence.shellCwd === "string" && evidence.shellCwd) {
+    return evidence.shellCwd;
+  }
+  return CHANGES_FOLDER.test(String(input.tool_input?.command ?? "")) ? null : cwd;
 }
 
 export function hasTouchedFile(evidence, absolutePath) {
